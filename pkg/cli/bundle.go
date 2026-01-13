@@ -9,10 +9,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/result"
+	"github.com/NVIDIA/cloud-native-stack/pkg/oci"
 	"github.com/NVIDIA/cloud-native-stack/pkg/recipe"
 	"github.com/NVIDIA/cloud-native-stack/pkg/serializer"
 	"github.com/NVIDIA/cloud-native-stack/pkg/snapshotter"
@@ -60,6 +62,10 @@ Set node selectors for GPU workloads:
     --accelerated-node-selector nodeGroup=gpu-nodes \
     --accelerated-node-toleration nvidia.com/gpu=present:NoSchedule
 
+Push bundle to OCI registry:
+  cnsctl bundle --recipe recipe.yaml --output ./my-bundle \
+    --push --registry ghcr.io --repository nvidia/cns-bundle --tag v1.0.0
+
 # Deployment (Helm)
 
 After generating the Helm bundle, deploy using:
@@ -78,7 +84,7 @@ After generating the ArgoCD bundle:
 				Name:     "recipe",
 				Aliases:  []string{"r"},
 				Required: true,
-				Usage: `Path/URI to previously generated recipe from which to build the bundle. 
+				Usage: `Path/URI to previously generated recipe from which to build the bundle.
 	Supports: file paths, HTTP/HTTPS URLs, or ConfigMap URIs (cm://namespace/name).`,
 			},
 			&cli.StringFlag{
@@ -118,6 +124,31 @@ After generating the ArgoCD bundle:
 				Value: "",
 				Usage: "Git repository URL for ArgoCD applications (only used with --deployer argocd)",
 			},
+			// OCI push flags
+			&cli.BoolFlag{
+				Name:  "push",
+				Usage: "Push generated bundle as OCI artifact to registry",
+			},
+			&cli.StringFlag{
+				Name:  "registry",
+				Usage: "OCI registry host (e.g., ghcr.io, localhost:5000)",
+			},
+			&cli.StringFlag{
+				Name:  "repository",
+				Usage: "OCI repository path (e.g., nvidia/cns-bundle)",
+			},
+			&cli.StringFlag{
+				Name:  "tag",
+				Usage: "OCI image tag (default: latest)",
+			},
+			&cli.BoolFlag{
+				Name:  "insecure-tls",
+				Usage: "Skip TLS certificate verification for OCI registry",
+			},
+			&cli.BoolFlag{
+				Name:  "plain-http",
+				Usage: "Use HTTP instead of HTTPS for OCI registry (for local development)",
+			},
 			kubeconfigFlag,
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -130,6 +161,28 @@ After generating the ArgoCD bundle:
 			// Validate deployer flag
 			if deployer != "" && deployer != deployerArgoCD {
 				return fmt.Errorf("invalid --deployer value: %q (must be '' or 'argocd')", deployer)
+			}
+
+			// OCI push options
+			pushEnabled := cmd.Bool("push")
+			registryHost := cmd.String("registry")
+			repository := cmd.String("repository")
+			tag := cmd.String("tag")
+			insecureTLS := cmd.Bool("insecure-tls")
+			plainHTTP := cmd.Bool("plain-http")
+
+			// Validate push flags
+			if pushEnabled {
+				if registryHost == "" {
+					return fmt.Errorf("--registry is required when --push is enabled")
+				}
+				if repository == "" {
+					return fmt.Errorf("--repository is required when --push is enabled")
+				}
+				// Validate registry and repository format
+				if err := oci.ValidateRegistryReference(registryHost, repository); err != nil {
+					return fmt.Errorf("invalid OCI reference: %w", err)
+				}
 			}
 
 			// Parse value overrides from --set flags
@@ -210,6 +263,61 @@ After generating the ArgoCD bundle:
 
 			// Print deployment instructions
 			printBundleDeploymentInstructions(deployer, repoURL, out)
+
+			// Push to OCI registry if enabled
+			if pushEnabled {
+				absOutputDir, err := filepath.Abs(outputDir)
+				if err != nil {
+					return fmt.Errorf("failed to resolve output directory: %w", err)
+				}
+
+				// Default tag if not provided
+				imageTag := tag
+				if imageTag == "" {
+					imageTag = "latest"
+				}
+
+				slog.Info("pushing bundle to OCI registry",
+					"registry", registryHost,
+					"repository", repository,
+					"tag", imageTag,
+				)
+
+				// Package locally first
+				packageResult, err := oci.Package(ctx, oci.PackageOptions{
+					SourceDir:  absOutputDir,
+					OutputDir:  absOutputDir,
+					Registry:   registryHost,
+					Repository: repository,
+					Tag:        imageTag,
+				})
+				if err != nil {
+					return fmt.Errorf("failed to package OCI artifact: %w", err)
+				}
+
+				slog.Info("OCI artifact packaged locally",
+					"reference", packageResult.Reference,
+					"digest", packageResult.Digest,
+					"store_path", packageResult.StorePath,
+				)
+
+				// Push to remote registry
+				pushResult, err := oci.PushFromStore(ctx, packageResult.StorePath, oci.PushOptions{
+					Registry:    registryHost,
+					Repository:  repository,
+					Tag:         imageTag,
+					PlainHTTP:   plainHTTP,
+					InsecureTLS: insecureTLS,
+				})
+				if err != nil {
+					return fmt.Errorf("failed to push OCI artifact to registry: %w", err)
+				}
+
+				slog.Info("OCI artifact pushed successfully",
+					"reference", pushResult.Reference,
+					"digest", pushResult.Digest,
+				)
+			}
 
 			return nil
 		},
