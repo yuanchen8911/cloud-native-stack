@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler"
@@ -69,9 +68,13 @@ Set node selectors for GPU workloads:
     --accelerated-node-selector nodeGroup=gpu-nodes \
     --accelerated-node-toleration nvidia.com/gpu=present:NoSchedule
 
-Push bundle to OCI registry:
-  cnsctl bundle --recipe recipe.yaml --output-format oci \
+Package bundle as OCI artifact (local only):
+  cnsctl bundle --recipe recipe.yaml --output ./my-bundle --output-format oci \
     --registry ghcr.io --repository nvidia/cns-bundle --tag v1.0.0
+
+Package and push bundle to OCI registry:
+  cnsctl bundle --recipe recipe.yaml --output ./my-bundle --output-format oci \
+    --registry ghcr.io --repository nvidia/cns-bundle --tag v1.0.0 --push
 
 # Deployment (Helm)
 
@@ -131,25 +134,30 @@ After generating the ArgoCD bundle:
 				Value: "",
 				Usage: "Git repository URL for ArgoCD applications (only used with --deployer argocd)",
 			},
-			// Output format flags
+			// Output format flag
 			&cli.StringFlag{
 				Name:    "output-format",
 				Aliases: []string{"F"},
 				Value:   outputFormatDir,
-				Usage:   "Output format: 'dir' (local directory) or 'oci' (push to OCI registry)",
+				Usage:   "Output format: 'dir' (local directory) or 'oci' (OCI Image Layout)",
 			},
-			// OCI registry flags (only used when output-format is oci)
+			// OCI registry flags (used when output-format is oci)
 			&cli.StringFlag{
 				Name:  "registry",
-				Usage: "OCI registry host (e.g., ghcr.io, localhost:5000)",
+				Usage: "OCI registry host for image reference (e.g., ghcr.io, localhost:5000)",
 			},
 			&cli.StringFlag{
 				Name:  "repository",
-				Usage: "OCI repository path (e.g., nvidia/cns-bundle)",
+				Usage: "OCI repository path for image reference (e.g., nvidia/cns-bundle)",
 			},
 			&cli.StringFlag{
 				Name:  "tag",
 				Usage: "OCI image tag (default: latest)",
+			},
+			// Push flag - controls whether to push to remote registry
+			&cli.BoolFlag{
+				Name:  "push",
+				Usage: "Push OCI artifact to remote registry (requires --output-format=oci)",
 			},
 			&cli.BoolFlag{
 				Name:  "insecure-tls",
@@ -178,12 +186,18 @@ After generating the ArgoCD bundle:
 			registryHost := cmd.String("registry")
 			repository := cmd.String("repository")
 			tag := cmd.String("tag")
+			push := cmd.Bool("push")
 			insecureTLS := cmd.Bool("insecure-tls")
 			plainHTTP := cmd.Bool("plain-http")
 
 			// Validate output-format
 			if outputFormat != outputFormatDir && outputFormat != outputFormatOCI {
 				return fmt.Errorf("--output-format must be '%s' or '%s', got '%s'", outputFormatDir, outputFormatOCI, outputFormat)
+			}
+
+			// Validate --push requires --output-format=oci
+			if push && outputFormat != outputFormatOCI {
+				return fmt.Errorf("--push requires --output-format=oci")
 			}
 
 			// Validate OCI flags when output-format is oci
@@ -194,7 +208,7 @@ After generating the ArgoCD bundle:
 				if repository == "" {
 					return fmt.Errorf("--repository is required when --output-format is 'oci'")
 				}
-				// Validate registry and repository format
+				// Validate registry and repository format early
 				if err := oci.ValidateRegistryReference(registryHost, repository); err != nil {
 					return fmt.Errorf("invalid OCI reference: %w", err)
 				}
@@ -262,28 +276,9 @@ After generating the ArgoCD bundle:
 				return err
 			}
 
-			// Determine output directory - use temp dir for OCI mode
-			var bundleOutputDir string
-			var cleanupTempDir func()
-
-			if outputFormat == outputFormatOCI {
-				// Create temp directory for OCI output
-				tempDir, tempErr := os.MkdirTemp("", "cns-bundle-*")
-				if tempErr != nil {
-					return fmt.Errorf("failed to create temp directory: %w", tempErr)
-				}
-				bundleOutputDir = tempDir
-				cleanupTempDir = func() { _ = os.RemoveAll(tempDir) }
-			} else {
-				bundleOutputDir = outputDir
-			}
-
 			// Generate bundle
-			out, err := b.Make(ctx, rec, bundleOutputDir)
+			out, err := b.Make(ctx, rec, outputDir)
 			if err != nil {
-				if cleanupTempDir != nil {
-					cleanupTempDir()
-				}
 				slog.Error("bundle generation failed", "error", err)
 				return err
 			}
@@ -301,25 +296,19 @@ After generating the ArgoCD bundle:
 				printBundleDeploymentInstructions(deployer, repoURL, out)
 			}
 
-			// Push to OCI registry if output-format is oci
+			// Package as OCI artifact when output-format is oci
 			if outputFormat == outputFormatOCI {
-				if pushErr := pushToOCI(ctx, ociPushConfig{
-					sourceDir:   bundleOutputDir,
+				if ociErr := handleOCIOutput(ctx, ociConfig{
+					sourceDir:   outputDir,
+					outputDir:   outputDir,
 					registry:    registryHost,
 					repository:  repository,
 					tag:         tag,
+					push:        push,
 					plainHTTP:   plainHTTP,
 					insecureTLS: insecureTLS,
-				}); pushErr != nil {
-					if cleanupTempDir != nil {
-						cleanupTempDir()
-					}
-					return pushErr
-				}
-
-				// Cleanup temp dir after successful push
-				if cleanupTempDir != nil {
-					cleanupTempDir()
+				}); ociErr != nil {
+					return ociErr
 				}
 			}
 
@@ -354,19 +343,27 @@ func printBundleDeploymentInstructions(deployer, repoURL string, out *result.Out
 	}
 }
 
-// ociPushConfig holds configuration for OCI push operations.
-type ociPushConfig struct {
+// ociConfig holds configuration for OCI operations.
+type ociConfig struct {
 	sourceDir   string
+	outputDir   string
 	registry    string
 	repository  string
 	tag         string
+	push        bool
 	plainHTTP   bool
 	insecureTLS bool
 }
 
-// pushToOCI pushes the bundle to an OCI registry.
-func pushToOCI(ctx context.Context, cfg ociPushConfig) error {
-	absOutputDir, err := filepath.Abs(cfg.sourceDir)
+// handleOCIOutput packages the bundle as an OCI artifact and optionally pushes to a remote registry.
+// When --push is specified, the artifact is also pushed to the remote registry.
+func handleOCIOutput(ctx context.Context, cfg ociConfig) error {
+	absSourceDir, err := filepath.Abs(cfg.sourceDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve source directory: %w", err)
+	}
+
+	absOutputDir, err := filepath.Abs(cfg.outputDir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve output directory: %w", err)
 	}
@@ -377,15 +374,16 @@ func pushToOCI(ctx context.Context, cfg ociPushConfig) error {
 		imageTag = "latest"
 	}
 
-	slog.Info("packaging and pushing bundle to OCI registry",
+	slog.Info("packaging bundle as OCI artifact",
 		"registry", cfg.registry,
 		"repository", cfg.repository,
 		"tag", imageTag,
+		"push", cfg.push,
 	)
 
 	// Package locally first
 	packageResult, err := oci.Package(ctx, oci.PackageOptions{
-		SourceDir:  absOutputDir,
+		SourceDir:  absSourceDir,
 		OutputDir:  absOutputDir,
 		Registry:   cfg.registry,
 		Repository: cfg.repository,
@@ -401,22 +399,30 @@ func pushToOCI(ctx context.Context, cfg ociPushConfig) error {
 		"store_path", packageResult.StorePath,
 	)
 
-	// Push to remote registry
-	pushResult, err := oci.PushFromStore(ctx, packageResult.StorePath, oci.PushOptions{
-		Registry:    cfg.registry,
-		Repository:  cfg.repository,
-		Tag:         imageTag,
-		PlainHTTP:   cfg.plainHTTP,
-		InsecureTLS: cfg.insecureTLS,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to push OCI artifact to registry: %w", err)
-	}
+	// Push to remote registry if requested
+	if cfg.push {
+		slog.Info("pushing OCI artifact to remote registry",
+			"registry", cfg.registry,
+			"repository", cfg.repository,
+			"tag", imageTag,
+		)
 
-	slog.Info("OCI artifact pushed successfully",
-		"reference", pushResult.Reference,
-		"digest", pushResult.Digest,
-	)
+		pushResult, pushErr := oci.PushFromStore(ctx, packageResult.StorePath, oci.PushOptions{
+			Registry:    cfg.registry,
+			Repository:  cfg.repository,
+			Tag:         imageTag,
+			PlainHTTP:   cfg.plainHTTP,
+			InsecureTLS: cfg.insecureTLS,
+		})
+		if pushErr != nil {
+			return fmt.Errorf("failed to push OCI artifact to registry: %w", pushErr)
+		}
+
+		slog.Info("OCI artifact pushed successfully",
+			"reference", pushResult.Reference,
+			"digest", pushResult.Digest,
+		)
+	}
 
 	return nil
 }
