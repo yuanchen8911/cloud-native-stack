@@ -127,6 +127,119 @@ func TestParseSetFlags(t *testing.T) {
 	}
 }
 
+func TestParseOutputTarget(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantIsOCI bool
+		wantReg   string
+		wantRepo  string
+		wantTag   string
+		wantDir   string
+		wantErr   bool
+	}{
+		{
+			name:      "local directory relative",
+			input:     "./bundle-out",
+			wantIsOCI: false,
+			wantDir:   "./bundle-out",
+		},
+		{
+			name:      "local directory absolute",
+			input:     "/tmp/bundles",
+			wantIsOCI: false,
+			wantDir:   "/tmp/bundles",
+		},
+		{
+			name:      "local directory current",
+			input:     ".",
+			wantIsOCI: false,
+			wantDir:   ".",
+		},
+		{
+			name:      "OCI with tag",
+			input:     "oci://ghcr.io/nvidia/bundle:v1.0.0",
+			wantIsOCI: true,
+			wantReg:   "ghcr.io",
+			wantRepo:  "nvidia/bundle",
+			wantTag:   "v1.0.0",
+		},
+		{
+			name:      "OCI without tag defaults to latest",
+			input:     "oci://ghcr.io/nvidia/bundle",
+			wantIsOCI: true,
+			wantReg:   "ghcr.io",
+			wantRepo:  "nvidia/bundle",
+			wantTag:   "latest",
+		},
+		{
+			name:      "OCI with port and tag",
+			input:     "oci://localhost:5000/test/bundle:v1",
+			wantIsOCI: true,
+			wantReg:   "localhost:5000",
+			wantRepo:  "test/bundle",
+			wantTag:   "v1",
+		},
+		{
+			name:      "OCI with port no tag",
+			input:     "oci://localhost:5000/test/bundle",
+			wantIsOCI: true,
+			wantReg:   "localhost:5000",
+			wantRepo:  "test/bundle",
+			wantTag:   "latest",
+		},
+		{
+			name:      "OCI deeply nested repository",
+			input:     "oci://ghcr.io/org/team/project/bundle:latest",
+			wantIsOCI: true,
+			wantReg:   "ghcr.io",
+			wantRepo:  "org/team/project/bundle",
+			wantTag:   "latest",
+		},
+		{
+			name:    "OCI invalid reference",
+			input:   "oci://",
+			wantErr: true,
+		},
+		{
+			name:    "OCI invalid characters",
+			input:   "oci://ghcr.io/INVALID/Bundle:v1",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			isOCI, reg, repo, tag, dir, err := parseOutputTarget(tt.input)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseOutputTarget() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if tt.wantErr {
+				return
+			}
+
+			if isOCI != tt.wantIsOCI {
+				t.Errorf("parseOutputTarget() isOCI = %v, want %v", isOCI, tt.wantIsOCI)
+			}
+			if reg != tt.wantReg {
+				t.Errorf("parseOutputTarget() registry = %v, want %v", reg, tt.wantReg)
+			}
+			if repo != tt.wantRepo {
+				t.Errorf("parseOutputTarget() repository = %v, want %v", repo, tt.wantRepo)
+			}
+			if tag != tt.wantTag {
+				t.Errorf("parseOutputTarget() tag = %v, want %v", tag, tt.wantTag)
+			}
+			if dir != tt.wantDir {
+				t.Errorf("parseOutputTarget() dir = %v, want %v", dir, tt.wantDir)
+			}
+		})
+	}
+}
+
 func TestBundleCmd(t *testing.T) {
 	cmd := bundleCmd()
 
@@ -144,8 +257,8 @@ func TestBundleCmd(t *testing.T) {
 		}
 	}
 
-	// Note: --bundlers and --deployer flags removed in umbrella chart approach
-	requiredFlags := []string{"recipe", "r", "output", "o", "set"}
+	// Required flags for the new URI-based output approach
+	requiredFlags := []string{"recipe", "r", "output", "o", "set", "plain-http", "insecure-tls"}
 	for _, flag := range requiredFlags {
 		if !flagNames[flag] {
 			t.Errorf("expected flag %q to be defined", flag)
@@ -162,6 +275,14 @@ func TestBundleCmd(t *testing.T) {
 	for _, flag := range nodeFlags {
 		if !flagNames[flag] {
 			t.Errorf("expected flag %q to be defined", flag)
+		}
+	}
+
+	// Verify removed flags don't exist (replaced by oci:// URI in --output)
+	removedFlags := []string{"output-format", "registry", "repository", "tag", "push", "F"}
+	for _, flag := range removedFlags {
+		if flagNames[flag] {
+			t.Errorf("flag %q should have been removed (use --output oci://... instead)", flag)
 		}
 	}
 }

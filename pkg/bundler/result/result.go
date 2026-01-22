@@ -29,7 +29,7 @@ type Result struct {
 	// Success indicates whether the bundler completed successfully.
 	Success bool `json:"success" yaml:"success"`
 
-	// OCI metadata (populated when --output-format=oci is used)
+	// OCI metadata (populated when --output=oci://... is used)
 
 	// OCIDigest is the SHA256 digest of the pushed OCI artifact.
 	OCIDigest string `json:"oci_digest,omitempty" yaml:"oci_digest,omitempty"`

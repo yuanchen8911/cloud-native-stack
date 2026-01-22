@@ -10,7 +10,9 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"strings"
 
+	"github.com/distribution/reference"
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler"
@@ -26,11 +28,11 @@ import (
 // deployerArgoCD is the ArgoCD deployer type.
 const deployerArgoCD = "argocd"
 
-// Output format constants.
+// OCI output constants.
 const (
-	outputFormatDir = "dir"
-	outputFormatOCI = "oci"
-	defaultOCITag   = "latest"
+	defaultOCITag = "latest"
+	// OCIURIScheme is the URI scheme for OCI registry output.
+	OCIURIScheme = "oci://"
 )
 
 // bundleCmdOptions holds parsed options for the bundle command.
@@ -45,28 +47,49 @@ type bundleCmdOptions struct {
 	systemNodeTolerations      []corev1.Toleration
 	acceleratedNodeSelector    map[string]string
 	acceleratedNodeTolerations []corev1.Toleration
-	outputFormat               string
-	registryHost               string
-	repository                 string
-	tag                        string
-	push                       bool
-	plainHTTP                  bool
-	insecureTLS                bool
+	// Output target fields (parsed from --output flag)
+	outputIsOCI   bool   // true if oci:// scheme detected
+	ociRegistry   string // parsed from oci:// URI
+	ociRepository string // parsed from oci:// URI
+	ociTag        string // parsed from oci:// URI (default: "latest")
+	plainHTTP     bool
+	insecureTLS   bool
+}
+
+// parseOutputTarget parses the --output flag value to detect OCI URI or local directory.
+// For OCI URIs (oci://registry/repository:tag), it extracts the components.
+// For plain paths, it treats them as local directories.
+func parseOutputTarget(target string) (isOCI bool, registry, repository, tag, dirPath string, err error) {
+	if !strings.HasPrefix(target, OCIURIScheme) {
+		return false, "", "", "", target, nil
+	}
+
+	// Strip oci:// and parse as standard image reference
+	ref, err := reference.ParseNormalizedNamed(strings.TrimPrefix(target, OCIURIScheme))
+	if err != nil {
+		return false, "", "", "", "", fmt.Errorf("invalid OCI reference: %w", err)
+	}
+
+	// Extract components using the reference package
+	registry = reference.Domain(ref)
+	repository = reference.Path(ref)
+
+	if tagged, ok := ref.(reference.Tagged); ok {
+		tag = tagged.Tag()
+	} else {
+		tag = defaultOCITag
+	}
+
+	return true, registry, repository, tag, "", nil
 }
 
 // parseBundleCmdOptions parses and validates command options.
 func parseBundleCmdOptions(cmd *cli.Command) (*bundleCmdOptions, error) {
 	opts := &bundleCmdOptions{
 		recipeFilePath: cmd.String("recipe"),
-		outputDir:      cmd.String("output"),
 		kubeconfig:     cmd.String("kubeconfig"),
 		deployer:       cmd.String("deployer"),
 		repoURL:        cmd.String("repo"),
-		outputFormat:   cmd.String("output-format"),
-		registryHost:   cmd.String("registry"),
-		repository:     cmd.String("repository"),
-		tag:            cmd.String("tag"),
-		push:           cmd.Bool("push"),
 		insecureTLS:    cmd.Bool("insecure-tls"),
 		plainHTTP:      cmd.Bool("plain-http"),
 	}
@@ -76,32 +99,29 @@ func parseBundleCmdOptions(cmd *cli.Command) (*bundleCmdOptions, error) {
 		return nil, fmt.Errorf("invalid --deployer value: %q (must be '' or 'argocd')", opts.deployer)
 	}
 
-	// Validate output-format
-	if opts.outputFormat != outputFormatDir && opts.outputFormat != outputFormatOCI {
-		return nil, fmt.Errorf("--output-format must be '%s' or '%s', got '%s'",
-			outputFormatDir, outputFormatOCI, opts.outputFormat)
+	// Parse output target (detects oci:// URI or local directory)
+	outputTarget := cmd.String("output")
+	isOCI, registry, repository, tag, dirPath, err := parseOutputTarget(outputTarget)
+	if err != nil {
+		return nil, fmt.Errorf("invalid --output value: %w", err)
 	}
 
-	// Validate --push requires --output-format=oci
-	if opts.push && opts.outputFormat != outputFormatOCI {
-		return nil, fmt.Errorf("--push requires --output-format=oci")
-	}
-
-	// Validate OCI flags when output-format is oci
-	if opts.outputFormat == outputFormatOCI {
-		if opts.registryHost == "" {
-			return nil, fmt.Errorf("--registry is required when --output-format is 'oci'")
+	opts.outputIsOCI = isOCI
+	if isOCI {
+		opts.ociRegistry = registry
+		opts.ociRepository = repository
+		opts.ociTag = tag
+		// For OCI output, we still need a temp directory for bundle generation
+		opts.outputDir = "."
+		// Validate registry and repository format
+		if valErr := oci.ValidateRegistryReference(registry, repository); valErr != nil {
+			return nil, fmt.Errorf("invalid --output OCI URI: %w", valErr)
 		}
-		if opts.repository == "" {
-			return nil, fmt.Errorf("--repository is required when --output-format is 'oci'")
-		}
-		if err := oci.ValidateRegistryReference(opts.registryHost, opts.repository); err != nil {
-			return nil, fmt.Errorf("invalid OCI reference: %w", err)
-		}
+	} else {
+		opts.outputDir = dirPath
 	}
 
 	// Parse value overrides from --set flags
-	var err error
 	opts.valueOverrides, err = config.ParseValueOverrides(cmd.StringSlice("set"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid --set flag: %w", err)
@@ -168,13 +188,8 @@ Set node selectors for GPU workloads:
     --accelerated-node-selector nodeGroup=gpu-nodes \
     --accelerated-node-toleration nvidia.com/gpu=present:NoSchedule
 
-Package bundle as OCI artifact (local only):
-  cnsctl bundle --recipe recipe.yaml --output ./my-bundle --output-format oci \
-    --registry ghcr.io --repository nvidia/cns-bundle --tag v1.0.0
-
 Package and push bundle to OCI registry:
-  cnsctl bundle --recipe recipe.yaml --output ./my-bundle --output-format oci \
-    --registry ghcr.io --repository nvidia/cns-bundle --tag v1.0.0 --push
+  cnsctl bundle --recipe recipe.yaml --output oci://ghcr.io/nvidia/cns-bundle:v1.0.0
 
 # Deployment (Helm)
 
@@ -201,7 +216,9 @@ After generating the ArgoCD bundle:
 				Name:    "output",
 				Aliases: []string{"o"},
 				Value:   ".",
-				Usage:   "Output directory path for the generated Helm umbrella chart",
+				Usage: `Output target: local directory path or OCI registry URI.
+	For local output: ./my-bundle or /tmp/bundle
+	For OCI registry: oci://ghcr.io/nvidia/bundle:v1.0.0`,
 			},
 			&cli.StringSliceFlag{
 				Name:  "set",
@@ -234,31 +251,8 @@ After generating the ArgoCD bundle:
 				Value: "",
 				Usage: "Git repository URL for ArgoCD applications (only used with --deployer argocd)",
 			},
-			// Output format flag
-			&cli.StringFlag{
-				Name:    "output-format",
-				Aliases: []string{"F"},
-				Value:   outputFormatDir,
-				Usage:   "Output format: 'dir' (local directory) or 'oci' (OCI Image Layout)",
-			},
-			// OCI registry flags (used when output-format is oci)
-			&cli.StringFlag{
-				Name:  "registry",
-				Usage: "OCI registry host for image reference (e.g., ghcr.io, localhost:5000)",
-			},
-			&cli.StringFlag{
-				Name:  "repository",
-				Usage: "OCI repository path for image reference (e.g., nvidia/cns-bundle)",
-			},
-			&cli.StringFlag{
-				Name:  "tag",
-				Usage: fmt.Sprintf("OCI image tag (default: %s)", defaultOCITag),
-			},
-			// Push flag - controls whether to push to remote registry
-			&cli.BoolFlag{
-				Name:  "push",
-				Usage: "Push OCI artifact to remote registry (requires --output-format=oci)",
-			},
+			kubeconfigFlag,
+			// OCI registry connection flags (used when --output is oci://...)
 			&cli.BoolFlag{
 				Name:  "insecure-tls",
 				Usage: "Skip TLS certificate verification for OCI registry",
@@ -267,7 +261,6 @@ After generating the ArgoCD bundle:
 				Name:  "plain-http",
 				Usage: "Use HTTP instead of HTTPS for OCI registry (for local development)",
 			},
-			kubeconfigFlag,
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			opts, err := parseBundleCmdOptions(cmd)
@@ -283,7 +276,7 @@ After generating the ArgoCD bundle:
 				slog.String("type", outputType),
 				slog.String("recipe", opts.recipeFilePath),
 				slog.String("output", opts.outputDir),
-				slog.String("output-format", opts.outputFormat),
+				slog.Bool("oci", opts.outputIsOCI),
 			)
 
 			// Load recipe from file/URL/ConfigMap
@@ -327,19 +320,18 @@ After generating the ArgoCD bundle:
 			)
 
 			// Print deployment instructions (only for dir output)
-			if opts.outputFormat == outputFormatDir {
+			if !opts.outputIsOCI {
 				printBundleDeploymentInstructions(opts.deployer, opts.repoURL, out)
 			}
 
-			// Package as OCI artifact when output-format is oci
-			if opts.outputFormat == outputFormatOCI {
+			// Package and push as OCI artifact when output is oci://
+			if opts.outputIsOCI {
 				if ociErr := handleOCIOutput(ctx, ociConfig{
 					sourceDir:   opts.outputDir,
 					outputDir:   opts.outputDir,
-					registry:    opts.registryHost,
-					repository:  opts.repository,
-					tag:         opts.tag,
-					push:        opts.push,
+					registry:    opts.ociRegistry,
+					repository:  opts.ociRepository,
+					tag:         opts.ociTag,
 					plainHTTP:   opts.plainHTTP,
 					insecureTLS: opts.insecureTLS,
 				}, out.Results); ociErr != nil {
@@ -385,14 +377,12 @@ type ociConfig struct {
 	registry    string
 	repository  string
 	tag         string
-	push        bool
 	plainHTTP   bool
 	insecureTLS bool
 }
 
-// handleOCIOutput packages the bundle as an OCI artifact and optionally pushes to a remote registry.
-// When --push is specified, the artifact is also pushed to the remote registry.
-// OCI metadata (digest, reference) is populated on results when --output-format=oci is used.
+// handleOCIOutput packages the bundle as an OCI artifact and pushes it to the registry.
+// OCI metadata (digest, reference) is populated on results when --output=oci://... is used.
 func handleOCIOutput(ctx context.Context, cfg ociConfig, results []*result.Result) error {
 	absSourceDir, err := filepath.Abs(cfg.sourceDir)
 	if err != nil {
@@ -410,11 +400,10 @@ func handleOCIOutput(ctx context.Context, cfg ociConfig, results []*result.Resul
 		imageTag = defaultOCITag
 	}
 
-	slog.Info("packaging bundle as OCI artifact",
+	slog.Info("packaging and pushing bundle as OCI artifact",
 		"registry", cfg.registry,
 		"repository", cfg.repository,
 		"tag", imageTag,
-		"push", cfg.push,
 	)
 
 	// Package locally first
@@ -435,42 +424,33 @@ func handleOCIOutput(ctx context.Context, cfg ociConfig, results []*result.Resul
 		"store_path", packageResult.StorePath,
 	)
 
-	// Update results with OCI metadata (pushed=false initially, updated after successful push)
-	for i := range results {
-		if results[i].Success {
-			results[i].SetOCIMetadata(packageResult.Digest, packageResult.Reference, false)
-		}
+	// Push to remote registry
+	slog.Info("pushing OCI artifact to remote registry",
+		"registry", cfg.registry,
+		"repository", cfg.repository,
+		"tag", imageTag,
+	)
+
+	pushResult, pushErr := oci.PushFromStore(ctx, packageResult.StorePath, oci.PushOptions{
+		Registry:    cfg.registry,
+		Repository:  cfg.repository,
+		Tag:         imageTag,
+		PlainHTTP:   cfg.plainHTTP,
+		InsecureTLS: cfg.insecureTLS,
+	})
+	if pushErr != nil {
+		return fmt.Errorf("failed to push OCI artifact to registry: %w", pushErr)
 	}
 
-	// Push to remote registry if requested
-	if cfg.push {
-		slog.Info("pushing OCI artifact to remote registry",
-			"registry", cfg.registry,
-			"repository", cfg.repository,
-			"tag", imageTag,
-		)
+	slog.Info("OCI artifact pushed successfully",
+		"reference", pushResult.Reference,
+		"digest", pushResult.Digest,
+	)
 
-		pushResult, pushErr := oci.PushFromStore(ctx, packageResult.StorePath, oci.PushOptions{
-			Registry:    cfg.registry,
-			Repository:  cfg.repository,
-			Tag:         imageTag,
-			PlainHTTP:   cfg.plainHTTP,
-			InsecureTLS: cfg.insecureTLS,
-		})
-		if pushErr != nil {
-			return fmt.Errorf("failed to push OCI artifact to registry: %w", pushErr)
-		}
-
-		slog.Info("OCI artifact pushed successfully",
-			"reference", pushResult.Reference,
-			"digest", pushResult.Digest,
-		)
-
-		// Mark results as pushed after successful push
-		for i := range results {
-			if results[i].Success {
-				results[i].Pushed = true
-			}
+	// Update results with OCI metadata
+	for i := range results {
+		if results[i].Success {
+			results[i].SetOCIMetadata(pushResult.Digest, pushResult.Reference, true)
 		}
 	}
 

@@ -25,6 +25,8 @@ import (
 	"oras.land/oras-go/v2/registry/remote"
 	"oras.land/oras-go/v2/registry/remote/auth"
 	"oras.land/oras-go/v2/registry/remote/credentials"
+
+	apperrors "github.com/NVIDIA/cloud-native-stack/pkg/errors"
 )
 
 // ArtifactType is the OCI media type for CNS bundle artifacts.
@@ -106,11 +108,13 @@ func ValidateRegistryReference(registry, repository string) error {
 	registryHost := stripProtocol(registry)
 
 	if !registryHostPattern.MatchString(registryHost) {
-		return fmt.Errorf("invalid registry host format '%s': must be a valid hostname with optional port", registryHost)
+		return apperrors.New(apperrors.ErrCodeInvalidRequest,
+			fmt.Sprintf("invalid registry host format '%s': must be a valid hostname with optional port", registryHost))
 	}
 
 	if !repositoryPattern.MatchString(repository) {
-		return fmt.Errorf("invalid repository format '%s': must be lowercase alphanumeric with optional separators (., _, -) and path segments", repository)
+		return apperrors.New(apperrors.ErrCodeInvalidRequest,
+			fmt.Sprintf("invalid repository format '%s': must be lowercase alphanumeric with optional separators (., _, -) and path segments", repository))
 	}
 
 	return nil
@@ -120,15 +124,15 @@ func ValidateRegistryReference(registry, repository string) error {
 // This stores the artifact locally without pushing to a remote registry.
 func Package(ctx context.Context, opts PackageOptions) (*PackageResult, error) {
 	if opts.Tag == "" {
-		return nil, fmt.Errorf("tag is required for OCI packaging")
+		return nil, apperrors.New(apperrors.ErrCodeInvalidRequest, "tag is required for OCI packaging")
 	}
 
 	if opts.Registry == "" {
-		return nil, fmt.Errorf("registry is required for OCI packaging")
+		return nil, apperrors.New(apperrors.ErrCodeInvalidRequest, "registry is required for OCI packaging")
 	}
 
 	if opts.Repository == "" {
-		return nil, fmt.Errorf("repository is required for OCI packaging")
+		return nil, apperrors.New(apperrors.ErrCodeInvalidRequest, "repository is required for OCI packaging")
 	}
 
 	// Validate registry and repository format
@@ -267,7 +271,7 @@ func PushFromStore(ctx context.Context, storePath string, opts PushOptions) (*Pu
 	// Copy from OCI store to remote repository
 	desc, err := oras.Copy(ctx, ociStore, opts.Tag, repo, opts.Tag, oras.DefaultCopyOptions)
 	if err != nil {
-		return nil, fmt.Errorf("failed to push artifact to registry: %w", err)
+		return nil, apperrors.Wrap(apperrors.ErrCodeUnavailable, "failed to push artifact to registry", err)
 	}
 
 	return &PushResult{

@@ -207,7 +207,7 @@ func TestPackage_Validation(t *testing.T) {
 		Repository: "test/repo",
 		Tag:        "",
 	})
-	if err == nil || err.Error() != "tag is required for OCI packaging" {
+	if err == nil || !strings.Contains(err.Error(), "tag is required for OCI packaging") {
 		t.Errorf("Package() expected tag error, got: %v", err)
 	}
 
@@ -219,7 +219,7 @@ func TestPackage_Validation(t *testing.T) {
 		Repository: "test/repo",
 		Tag:        "v1.0.0",
 	})
-	if err == nil || err.Error() != "registry is required for OCI packaging" {
+	if err == nil || !strings.Contains(err.Error(), "registry is required for OCI packaging") {
 		t.Errorf("Package() expected registry error, got: %v", err)
 	}
 
@@ -231,7 +231,7 @@ func TestPackage_Validation(t *testing.T) {
 		Repository: "",
 		Tag:        "v1.0.0",
 	})
-	if err == nil || err.Error() != "repository is required for OCI packaging" {
+	if err == nil || !strings.Contains(err.Error(), "repository is required for OCI packaging") {
 		t.Errorf("Package() expected repository error, got: %v", err)
 	}
 }
