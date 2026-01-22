@@ -1,0 +1,51 @@
+kind: recipeMetadata
+apiVersion: cns.nvidia.com/v1alpha1
+metadata:
+  name: gb200-eks-training
+
+spec:
+  # Inherits from eks-training recipe (EKS + training settings)
+  base: eks-training
+
+  criteria:
+    service: eks
+    accelerator: gb200
+    intent: training
+
+  # Specific constraints for GB200 on EKS training workloads
+  # Constraint names use fully qualified measurement paths: {type}.{subtype}.{key}
+  constraints:
+    - name: K8s.server.version
+      value: ">= 1.32.4"
+
+  componentRefs:
+
+    # GB200-specific GPU Operator overrides (inherits valuesFile from eks-training)
+    - name: gpu-operator
+      type: Helm
+      version: v25.3.3
+      overrides:
+        driver:
+          version: 580.82.07
+          kernelModuleConfig:
+            name: "kernel-module-params"
+        cdi:
+          enabled: true
+          default: false
+        gdrcopy:
+          enabled: true
+
+    # Override with basic Linux training customization for Skyhook
+    - name: skyhook
+      type: Helm
+      overrides:
+        customization: training
+
+    # Add dra-driver for GB200
+    - name: dra-driver
+      type: Helm
+      source: https://helm.ngc.nvidia.com/nvidia
+      version: v25.8.1
+      valuesFile: components/dra-driver/values.yaml
+      dependencyRefs:
+        - gpu-operator

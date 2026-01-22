@@ -1,151 +1,118 @@
-# NVIDIA Cloud Native Stack 
+# Cloud Native Stack
 
+Cloud Native Stack (CNS) provides validated configuration guidance for deploying GPU-accelerated Kubernetes infrastructure. It captures known-good combinations of software, configuration, and system requirements and makes them consumable as documentation and generated deployment artifacts.
 
-## Introduction
+## Why We Built This
 
-NVIDIA Cloud Native Stack (CNS) is a collection of software to run cloud native workloads on NVIDIA GPUs. NVIDIA Cloud Native Stack is based on Ubuntu/RHEL, Kubernetes, Helm and the NVIDIA GPU and Network Operator.
+Running NVIDIA-accelerated Kubernetes clusters reliably is hard. Small differences in kernel versions, drivers, container runtimes, operators, and Kubernetes releases can cause failures that are difficult to diagnose and expensive to reproduce.
 
-Interested in deploying NVIDIA Cloud Native Stack? This repository has [install guides](https://github.com/NVIDIA/cloud-native-stack/tree/master/install-guides) for manual installations and [ansible playbooks](https://github.com/NVIDIA/cloud-native-stack/tree/master/playbooks) for automated installations.
+Historically, this knowledge has lived in internal validation pipelines, playbooks, and tribal knowledge. Cloud Native Stack exists to externalize that experience. Its goal is to make validated configurations visible, repeatable, and reusable across environments.
 
-Interested in a pre-provisioned NVIDIA Cloud Native Stack environment? [NVIDIA LaunchPad](https://www.nvidia.com/en-us/data-center/launchpad/) provides pre-provisioned environments so that you can quickly get started.
+## What Cloud Native Stack Is (and Is Not)
 
-## Objective
+Cloud Native Stack is a **source of validated configuration knowledge** for NVIDIA-accelerated Kubernetes environments.
 
-- CNS comes as a reference architecture that list all components that have been tested successfully together. the CNS reference architecture can be used as specification for production deployments.
+It **is**:
+- A curated set of tested and validated component combinations
+- A reference for how NVIDIA-accelerated Kubernetes clusters are expected to be configured
+- A foundation for generating reproducible deployment artifacts
+- Designed to integrate with existing provisioning, CI/CD, and GitOps workflows
 
-- CNS also comes as installation guides and playbook that can be used to instantiate a quick K8s environment with NVIDIA operators. The CNS installation guides and playbook are intended only for test and PoC environments.
+It **is not**:
+- A Kubernetes distribution
+- A cluster provisioning or lifecycle management system
+- A managed control plane or hosted service
+- A replacement for cloud provider or OEM platforms
 
-  Note: The K8s layer that CNS install guide or playbook deploys is basic (no HA for instance) and as such cannot be used for production. However all NVIDIA componants in CNS are fully operable in production environment. 
+---
+### Note on previous versions**  
+> Earlier versions of Cloud Native Stack focused primarily on manual installation guides and playbooks. Those materials remain available under [`/~archive/cns-v1`](/~archive/cns-v1/). The current repository reflects a transition toward structured configuration data and generated artifacts.
+---
 
-## Life Cycle
+## How It Works
 
-When NVIDIA Cloud Native Stack batch is released, the previous batch enters maintenance support and only receives patch release updates. All prior batches enter end-of-life (EOL) and are no longer supported and do not receive patch updates.
+Cloud Native Stack separates **validated configuration knowledge** from **how that knowledge is consumed**.
 
-> Note: Upgrades are only supported from previous batch to latest batch.
+- Human-readable documentation lives under `docs/`.
+- Version-locked configuration definitions (“recipes”) capture known-good system states.
+- Those definitions can be rendered into concrete artifacts such as Helm values, Kubernetes manifests, or install scripts.- Recipes can be validated against actual system configurations to verify compatibility.
+This separation allows the same validated configuration to be applied consistently across different environments and automation systems.
 
+*For example, a configuration validated for gb200 on Ubuntu 22.04 with Kubernetes 1.29 can be rendered into Helm values and manifests suitable for use in an existing GitOps pipeline.*
 
-|  Batch  | Status              |
-| :-----: | :--------------:|
-| [24.11.0](https://github.com/NVIDIA/cloud-native-stack/releases/tag/v24.11.0)                   | Generally Available | 
-| [24.8.1](https://github.com/NVIDIA/cloud-native-stack/releases/tag/v24.8.1)                   | Maintenance         |
-| [24.5.0](https://github.com/NVIDIA/cloud-native-stack/releases/tag/v24.5.0) and lower                   | EOL                 |
+## Get Started
 
+> Some tooling and APIs are under active development; documentation reflects current and near-term capabilities.
 
-For more information, Refer [Cloud Native Stack Releases](https://github.com/NVIDIA/cloud-native-stack/releases)
+### Quick Start
 
-## Component Matrix
+Get started quickly with CNS:
+1. Review the documentation under `docs/` to understand supported platforms and required components.
+2. Identify your target environment:
+   - GPU architecture
+   - Operating system and kernel
+   - Kubernetes distribution and version
+   - Workload intent (for example, training or inference)
+3. Apply the validated configuration guidance using your existing tools (Helm, kubectl, CI/CD, or GitOps).
+4. Validate and iterate as platforms and workloads evolve.
 
-#### Cloud Native Stack Batch 24.11.0 (Release Date: 14 November 2024)
+### Get Started by Use Case
 
-| CNS Version               | 14.0    | 13.2 | 12.3 |
-| :-----:                   | :-----: | :------: | :------: |
-| Platforms                 | <ul><li>NVIDIA Certified Server (x86 & arm64)</li><li>DGX Server</li></ul> | <ul><li>NVIDIA Certified Server (x86 & arm64)</li><li>DGX Server</li></ul> | <ul><li>NVIDIA Certified Server (x86 & arm64)</li><li>DGX Server</li></ul> |
-| Supported OS              |  <ul><li>Ubuntu 22.04 LTS</li><li>RHEL 8.10</li><li>DGX OS 6.2(Ubuntu 22.04 LTS)</li></ul> |  <ul><li>Ubuntu 22.04 LTS</li><li>RHEL 8.10</li><li>DGX OS 6.2(Ubuntu 22.04 LTS)</li></ul> |  <ul><li>Ubuntu 22.04 LTS</li><li>RHEL 8.10</li><li>DGX OS 6.2(Ubuntu 22.04 LTS)</li></ul> |
-| Containerd                | 1.7.23 | 1.7.23 | 1.7.23 |
-| NVIDIA Container Toolkit  | 1.17.0 | 1.17.0 | 1.17.0 |
-| CRI-O                     | 1.31.2 | 1.30.6 | 1.29.10 |
-| Kubernetes                | 1.31.2 | 1.30.6 | 1.29.10 |
-| CNI (Calico)              | 3.28.2 | 3.28.2 |  3.28.2 |
-| NVIDIA GPU Operator       | 24.9.0 | 24.9.0 | 24.9.0 |
-| NVIDIA Network Operator   | 24.7.0 | 24.7.0 | 24.7.0 |
-| NVIDIA Data Center Driver | 550.127.05 | 550.127.05 | 550.127.05 |
-| Helm                      | 3.16.2 | 3.16.2 | 3.16.2 |
+These use cases reflect common ways teams interact with Cloud Native Stack.
 
-> Note: To Previous Cloud Native Stack release information can be found [here](https://github.com/NVIDIA/cloud-native-stack/tree/24.5.0?tab=readme-ov-file#nvidia-cloud-native-stack-component-matrix)
+<details>
+<summary><strong>Platform and Infrastructure Operators</strong></summary>
 
-`NOTE:` Cloud Native Stack versions are available with the master branch but it's recommend to use the specific branch.
+You are responsible for deploying and operating GPU-accelerated Kubernetes clusters. 
+- **[Installation Guide](docs/user-guide/installation.md)** – Install the cnsctl CLI (automated script, manual, or build from source)
+- **[CLI Reference](docs/user-guide/cli-reference.md)** – Complete command reference with examples
+- **[API Reference](docs/user-guide/api-reference.md)** – Complete API reference with examples
+- **[Agent Deployment](docs/user-guide/agent-deployment.md)** – Deploy the Kubernetes agent to get automated configuration snapshots
+</details>
 
-# Software
+<details>
+<summary><strong>Developers and Contributors</strong></summary>
 
-`NOTE:` currently MicroK8s functionality is limited with GPU Operator 24.9.0 as there's known [bug](https://github.com/NVIDIA/gpu-operator/issues/1109). we expected to fix this with another release soon. 
+You are contributing code, extending functionality, or working on CNS internals. 
 
-- Kubernetes
-  - [GPU Operator](https://github.com/NVIDIA/gpu-operator)
-  - [Network Operator](https://github.com/Mellanox/network-operator)  
-  - [NVIDIA NIM Operator](https://docs.nvidia.com/nim-operator/latest/index.html)
-  - [FeatureGates](https://github.com/NVIDIA/cloud-native-stack/tree/master/playbooks#enable-feature-gates-to-cloud-native-stack)
-- [MicroK8s on CNS](https://github.com/NVIDIA/cloud-native-stack/tree/master/playbooks#enable-microk8s)
-- [Installation on CSP's](https://github.com/NVIDIA/cloud-native-stack/tree/master/playbooks#installation-on-csps)
-- [Storage on CNS](https://github.com/NVIDIA/cloud-native-stack/tree/master/playbooks#storage-on-cns)
-- [Monitoring on CNS](https://github.com/NVIDIA/cloud-native-stack/tree/master/playbooks#monitoring-on-cns)
-- [LoadBalancer on CNS](https://github.com/NVIDIA/cloud-native-stack/tree/master/playbooks#load-balancer-on-cns)
-- [Kserve](https://github.com/NVIDIA/cloud-native-stack/tree/master/playbooks#enable-kserve-on-cns)
-- [LeaderWorkerSet(lws)](https://github.com/NVIDIA/cloud-native-stack/tree/master/playbooks#enable-leaderworkerset)
+- **[Contributing Guide](CONTRIBUTING.md)** – Development setup, testing, and PR process
+- **[Architecture Overview](docs/architecture/README.md)** – System design and components
+- **[Bundler Development](docs/architecture/component.md)** – How to create new bundlers
+- **[Data Architecture](docs/architecture/data.md)** – Recipe data model and query matching
+</details>
 
-| CNS Version               | 14.0    | 13.2 | 12.3 |
-| :-----:                   | :-----: | :------: | :------: |
-| MicroK8s                  | 1.31    | 1.30     | 1.29 |
-| KServe                    | <br /> **0.14** <br /> <br /> <ul><li>Istio: 1.23.2</li><li>Knative: 1.15.7</li><li>CertManager: 1.16.1</li></ul> | <br /> **0.14** <br /> <br /> <ul><li>Istio: 1.23.2</li><li>Knative: 1.15.7</li><li>CertManager: 1.16.1</li></ul>  | <br /> **0.14** <br /> <br /> <ul><li>Istio: 1.23.2</li><li>Knative: 1.15.7</li><li>CertManager: 1.16.1</li></ul> | 
-| LeaderWorkerSet           | 0.4.1 | 0.4.1 | 0.4.1|
-| LoadBalancer              | MetalLB: 0.14.5 | MetalLB: 0.14.5 | MetalLB: 0.14.5 |
-| Storage                   | NFS: 4.0.18 <br /> Local Path: 0.0.30 | NFS: 4.0.18 <br /> Local Path: 0.0.30 | NFS: 4.0.18 <br /> Local Path: 0.0.30 | 
-| Monitoring                | Prometheus: 25.27.0 <br /> Prometheus Adapter: 4.11.0 <br /> Elastic: 8.15.3 | Prometheus: 25.27.0 <br /> Prometheus Adapter: 4.11.0 <br /> Elastic: 8.15.3 | Prometheus: 25.27.0 <br /> Prometheus Adapter: 4.11.0 <br /> Elastic: 8.15.3 |
+<details>
+<summary><strong>Integrators and Automation Engineers</strong></summary>
 
-# Getting Started
+You are integrating CNS into CI/CD pipelines, GitOps workflows, or a larger product or service. 
 
-#### Prerequisites
+- **[API Reference](docs/integration/api-reference.md)** – REST API endpoints and usage examples
+- **[Data Flow](docs/integration/data-flow.md)** – Understanding snapshots, recipes, and bundles
+- **[Automation Guide](docs/integration/automation.md)** – CI/CD integration patterns
+- **[Kubernetes Deployment](docs/integration/kubernetes-deployment.md)** – Self-hosted API server setup
+</details>
 
-Please make sure to meet the following prerequisites to Install the Cloud Native Stack
+## Project Structure
 
-- system has direct internet access
-- system should have an Operating system either Ubuntu 22.04 and above or RHEL 8.10
-- system has adequate internet bandWidth
-- DNS server is working fine on the System
-- system can access Google repo(for k8s installation)
-- system has only 1 network interface configured with internet access. The IP is static and doesn't change
-- UEFI secure boot is disabled
-- Root file system should has at least 40GB capacity
-- system has 2CPU and 4GB Memory
-- At least one NVIDIA GPU attached to the system
+- `api/` — OpenAPI specifications for the REST API
+- `cmd/` — Entry points for CLI (`cnsctl`) and API server (`cnsd`)
+- `deployments/` — Kubernetes manifests for agent deployment
+- `docs/` — User-facing documentation, guides, and architecture docs
+- `examples/` — Example snapshots, recipes, and comparisons
+- `infra/` — Infrastructure as code (Terraform) for deployments
+- `pkg/` — Core Go packages (collectors, recipe engine, bundlers, serializers)
+- `tools/` — Build scripts, E2E testing, and utilities
+- `~archive/` — Archived v1 installation guides and playbooks
 
-#### Installation 
+## Documentation & Resources
 
-Run the below commands to clone the NVIDIA Cloud Native Stack.
+- **[Documentation](/docs)** – Documentation, guides, and examples.
+- **[Roadmap](ROADMAP.md)** – Feature priorities and development timeline
+- **[Transition](docs/MIGRATION.md)** - Migration to CLI/API-based bundle generation
+- **[Security](SECURITY.md)** - Security-related resources 
+- **[Releases](https://github.com/NVIDIA/cloud-native-stack/releases)** - Binaries, SBOMs, and other artifacts
+- **[Issues](https://github.com/NVIDIA/cloud-native-stack/issues)** - Bugs, feature requests, and questions
 
-```
-git clone https://github.com/NVIDIA/cloud-native-stack.git
-cd cloud-native-stack/playbooks
-```
+## Contributing
 
-Update the hosts file in playbooks directory with master and worker nodes(if you have) IP's with username and password like below
-
-```
-nano hosts
-
-[master]
-<master-IP> ansible_ssh_user=nvidia ansible_ssh_pass=nvidipass ansible_sudo_pass=nvidiapass ansible_ssh_common_args='-o StrictHostKeyChecking=no'
-[nodes]
-<worker-IP> ansible_ssh_user=nvidia ansible_ssh_pass=nvidiapass ansible_sudo_pass=nvidiapass ansible_ssh_common_args='-o StrictHostKeyChecking=no'
-```
-
-Install the NVIDIA Cloud Native Stack stack by running the below command. "Skipping" in the ansible output refers to the Kubernetes cluster is up and running.
-
-```
-bash setup.sh install
-```
-For more Information about customize the values, please refer [Installation](https://github.com/NVIDIA/cloud-native-stack/tree/master/playbooks#installation)
-
-# Topologies
-
-- Cloud Native Stack allows to deploy:
-    - 1 node with both control plane and worker functionalities
-    - 1 control plane node and any number of worker nodes
-
-`NOTE:` (Cloud Native Stack does not allow the deployment of several control plane nodes)
-
-# Troubleshooting
-
-[Troubleshoot CNS installation issues](https://github.com/NVIDIA/cloud-native-stack/blob/master/troubleshooting/README.md)
-
-# Getting help or Providing feedback
-
-Please open an [issue](https://github.com/NVIDIA/cloud-native-stack/issues) on the GitHub project for any questions. Your feedback is appreciated.
-
-# Useful Links
-- [NVIDIA LaunchPad](https://www.nvidia.com/en-us/data-center/launchpad/)
-- [NVIDIA LaunchPad Labs](https://docs.nvidia.com/launchpad/index.html)
-- [Cloud Native Stack on LaunchPad](https://docs.nvidia.com/LaunchPad/developer-labs/overview.html)
-- [NVIDIA GPU Operator](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/overview.html)
-- [NVIDIA Network Operator](https://docs.nvidia.com/networking/display/COKAN10/Network+Operator)
-- [NVIDIA Certified Systems](https://www.nvidia.com/en-us/data-center/products/certified-systems/)
-- [NVIDIA GPU Cloud (NGC)](https://catalog.ngc.nvidia.com/)
+Contributions are welcome. See [contributing](/CONTRIBUTING.md) for development setup, contribution guidelines, and the pull request process.

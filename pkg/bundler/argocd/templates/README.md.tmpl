@@ -1,0 +1,122 @@
+# Cloud Native Stack - ArgoCD Deployment
+
+Generated: {{ .Timestamp }}
+Recipe Version: {{ .RecipeVersion }}
+Bundler Version: {{ .BundlerVersion }}
+
+## Overview
+
+This bundle contains ArgoCD Applications for deploying Cloud Native Stack components.
+It uses the **App of Apps** pattern where a parent application manages individual
+component applications.
+
+## Components
+
+The following components will be deployed (in sync-wave order):
+
+{{ range .Components }}
+- **{{ .Name }}** (sync-wave: {{ .SyncWave }})
+  - Version: {{ .Version }}
+  - Namespace: {{ .Namespace }}
+  - Repository: {{ .Repository }}
+{{ end }}
+
+## Prerequisites
+
+- ArgoCD installed and configured in your cluster
+- Access to the NGC Helm repository (https://helm.ngc.nvidia.com/nvidia)
+- This directory pushed to a Git repository accessible by ArgoCD
+
+## Deployment
+
+### Option 1: Using App of Apps (Recommended)
+
+1. Push this directory to your GitOps repository
+2. Update `app-of-apps.yaml` with your repository URL and path:
+   ```yaml
+   spec:
+     source:
+       repoURL: https://github.com/YOUR-ORG/YOUR-REPO.git
+       targetRevision: main
+       path: path/to/this/directory
+   ```
+3. Apply the App of Apps:
+   ```bash
+   kubectl apply -f app-of-apps.yaml
+   ```
+
+### Option 2: Individual Applications
+
+Apply each component application individually:
+
+```bash
+{{ range .Components }}
+kubectl apply -f {{ .Name }}/application.yaml
+{{ end }}
+```
+
+## Directory Structure
+
+```
+{{ .OutputDir }}/
+├── app-of-apps.yaml          # Parent application (manages all components)
+├── README.md                 # This file
+{{ range .Components }}├── {{ .Name }}/
+│   ├── application.yaml      # ArgoCD Application manifest
+│   └── values.yaml           # Helm values for this component
+{{ end }}└── recipe.yaml               # Original recipe for reference
+```
+
+## Customization
+
+### Modify Values
+
+Edit the `values.yaml` file in each component directory to customize the deployment.
+ArgoCD will automatically sync the changes.
+
+### Change Sync Waves
+
+Sync waves control the deployment order. Lower numbers deploy first.
+Edit the `argocd.argoproj.io/sync-wave` annotation in each `application.yaml`.
+
+Current sync wave order:
+{{ range .Components }}
+- {{ .Name }}: {{ .SyncWave }}
+{{ end }}
+
+## Monitoring
+
+Monitor the deployment status:
+
+```bash
+# Check all applications
+argocd app list
+
+# Check specific application
+argocd app get {{ (index .Components 0).Name }}
+
+# Sync manually if needed
+argocd app sync cns-stack
+```
+
+## Troubleshooting
+
+### Application stuck in "Progressing"
+
+Check the application status:
+```bash
+argocd app get <app-name> --show-operation
+```
+
+### Sync failed
+
+Check the sync status and logs:
+```bash
+argocd app sync <app-name> --prune
+kubectl logs -n argocd -l app.kubernetes.io/name=argocd-application-controller
+```
+
+### Values not applying
+
+Ensure the values.yaml is referenced correctly in the Application spec
+and that the file exists in the Git repository.

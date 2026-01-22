@@ -1,0 +1,12 @@
+# Skyhook Helm values
+# Base configuration for all deployments
+
+controllerManager:
+  manager:
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 4000Mi
+      requests:
+        cpu: 1000m
+        memory: 2000Mi

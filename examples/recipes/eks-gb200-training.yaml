@@ -1,0 +1,68 @@
+kind: recipeResult
+apiVersion: cns.nvidia.com/v1alpha1
+metadata:
+  generatedAt: 2026-01-22T22:47:31.169808Z
+  version: v0.0.0-next
+  appliedOverlays:
+    - base
+    - eks
+    - eks-training
+    - gb200-eks-training
+criteria:
+  service: eks
+  accelerator: gb200
+  intent: training
+  os: any
+constraints:
+  - name: K8s.server.version
+    value: '>= 1.32.4'
+componentRefs:
+  - name: cert-manager
+    type: Helm
+    source: https://charts.jetstack.io
+    version: v1.17.2
+    valuesFile: components/cert-manager/values.yaml
+  - name: dra-driver
+    type: Helm
+    source: https://helm.ngc.nvidia.com/nvidia
+    version: v25.8.1
+    valuesFile: components/dra-driver/values.yaml
+    dependencyRefs:
+      - gpu-operator
+  - name: gpu-operator
+    type: Helm
+    source: https://helm.ngc.nvidia.com/nvidia
+    version: v25.3.3
+    valuesFile: components/gpu-operator/values-eks-training.yaml
+    overrides:
+      cdi:
+        default: false
+        enabled: true
+      driver:
+        kernelModuleConfig:
+          name: kernel-module-params
+        version: 580.82.07
+      gdrcopy:
+        enabled: true
+    dependencyRefs:
+      - cert-manager
+  - name: nvsentinel
+    type: Helm
+    source: oci://ghcr.io/nvidia/nvsentinel
+    version: v0.6.0
+    valuesFile: components/nvsentinel/values.yaml
+    dependencyRefs:
+      - cert-manager
+  - name: skyhook
+    type: Helm
+    source: oci://ghcr.io/nvidia/skyhook
+    version: v0.4.0
+    valuesFile: components/skyhook/values.yaml
+    overrides:
+      customization: training
+deploymentOrder:
+  - cert-manager
+  - gpu-operator
+  - dra-driver
+  - nvsentinel
+  - skyhook

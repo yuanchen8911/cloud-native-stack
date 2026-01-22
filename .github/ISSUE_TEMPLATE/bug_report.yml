@@ -1,0 +1,137 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+
+body:
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I searched existing issues
+          required: true
+        - label: I can reproduce this issue
+          required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: What happened and what did you expect?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      description: How severe is this issue for you?
+      options:
+        - Blocking (cannot proceed)
+        - High (major functionality broken)
+        - Medium (workaround exists)
+        - Low (minor issue)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - CLI
+        - API server
+        - Recipe engine / data
+        - Bundlers
+        - Collectors / snapshotter
+        - Docs/examples
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      placeholder: |
+        1. Step one
+        2. Step two
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: |
+        - CNS version (CLI `cnsctl version`, API image tag, or commit SHA):
+        - Install method (release binary / build from source / container image):
+        - Platform (eks/gke/aks/self-managed):
+        - Kubernetes version:
+        - OS (ubuntu/cos/other) + version:
+        - Kernel version:
+        - GPU type (h100/gb200/a100/l40/other):
+        - Workload intent (training/inference):
+      value: |
+        - CNS version (CLI `cnsctl version`, API image tag, or commit SHA):
+        - Install method (release binary / build from source / container image):
+        - Platform (eks/gke/aks/self-managed):
+        - Kubernetes version:
+        - OS (ubuntu/cos/other) + version:
+        - Kernel version:
+        - GPU type (h100/gb200/a100/l40/other):
+        - Workload intent (training/inference):
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Command / Request Used
+      description: Paste the exact CLI command(s) or API request(s) that triggered the issue.
+      placeholder: |
+        ```bash
+        cnsctl recipe --snapshot ... --intent training
+        ```
+
+        ```bash
+        curl "http://localhost:8080/v1/recipe?..."
+        ```
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs/Output
+      description: Include relevant logs or error messages (redact credentials/secrets).
+      placeholder: |
+        ```
+        # Logs here
+        ```
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Anything else that might help (regression? recent upgrade? related issues?).
+    validations:
+      required: false

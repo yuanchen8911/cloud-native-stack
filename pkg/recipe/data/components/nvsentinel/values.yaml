@@ -1,0 +1,17 @@
+# NVSentinel Helm values
+# Base configuration for all deployments
+
+global: {}
+
+platformConnector:
+
+  resources:
+    limits:
+      cpu: 200m
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 512Mi
+
+  updateStrategy: RollingUpdate
+  maxUnavailable: 1

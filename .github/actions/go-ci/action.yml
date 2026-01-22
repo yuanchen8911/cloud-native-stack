@@ -1,0 +1,88 @@
+name: 'Go CI (setup, test, lint)'
+description: 'Shared Go workflow steps: setup environment, run unit tests, and lint Go/YAML'
+
+inputs:
+  go_version:
+    description: 'Go version to install (e.g., 1.25)'
+    required: true
+  golangci_lint_version:
+    description: 'golangci-lint version to use (e.g., v2.6)'
+    required: true
+  upload_codecov:
+    description: 'Whether to upload coverage to Codecov (true/false)'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    # Setup Environment
+    - name: Setup Go
+      uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00  # v6.0.0
+      with:
+        go-version: '${{ inputs.go_version }}'
+        cache: true
+        cache-dependency-path: 'go.sum'
+        check-latest: true
+
+    # Unit Tests
+    - name: Tidy Modules
+      shell: bash
+      run: make tidy
+
+    - name: Run Tests with Coverage
+      shell: bash
+      run: make test
+
+    - name: Upload Coverage to Codecov
+      if: inputs.upload_codecov == 'true'
+      uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de  # v5.5.2
+      with:
+        files: ./coverage.out
+        verbose: true
+        use_oidc: true
+      continue-on-error: true
+
+    # Lint Code
+    - name: Config Go Lint
+      id: golangci_config
+      uses: andstor/file-existence-action@076e0072799f4942c8bc574a82233e1e4d13e9d6  # v3.0.0
+      with:
+        files: .golangci.yaml
+
+    - name: Lint Go
+      if: steps.golangci_config.outputs.files_exists == 'true'
+      uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20  # v9.2.0
+      with:
+        version: ${{ inputs.golangci_lint_version }}
+        args: --timeout=5m
+
+    - name: Config YAML Lint
+      id: yamllint_config
+      uses: andstor/file-existence-action@076e0072799f4942c8bc574a82233e1e4d13e9d6  # v3.0.0
+      with:
+        files: .yamllint.yaml
+
+    - name: Lint YAML
+      if: steps.yamllint_config.outputs.files_exists == 'true'
+      shell: bash
+      run: |
+        sudo apt-get update && sudo apt-get install -y yamllint
+        make lint-yaml
+
+    # E2E Integration Tests
+    - name: Setup build tools
+      uses: ./.github/actions/setup-build-tools
+      with:
+        install_goreleaser: 'true'
+
+    - name: Config E2E Test
+      id: e2e_config
+      uses: andstor/file-existence-action@076e0072799f4942c8bc574a82233e1e4d13e9d6  # v3.0.0
+      with:
+        files: tools/e2e
+
+    - name: Run E2E Integration Tests
+      if: steps.e2e_config.outputs.files_exists == 'true'
+      shell: bash
+      run: ./tools/e2e

@@ -1,0 +1,19 @@
+# Network Operator Helm values
+# Base configuration for all deployments
+
+deployCR: true
+
+nfd:
+  enabled: false
+
+sriovNetworkOperator:
+  enabled: false
+
+nvIpam:
+  enabled: true
+
+secondaryNetwork:
+  deploy: true
+
+nicClusterPolicy:
+  enabled: true

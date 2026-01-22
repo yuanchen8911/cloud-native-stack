@@ -1,0 +1,482 @@
+/*
+Copyright © 2025 NVIDIA Corporation
+SPDX-License-Identifier: Apache-2.0
+*/
+
+package bundler
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	corev1 "k8s.io/api/core/v1"
+
+	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
+	"github.com/NVIDIA/cloud-native-stack/pkg/recipe"
+)
+
+func TestNew(t *testing.T) {
+	t.Run("default bundler", func(t *testing.T) {
+		bundler, err := New()
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+		if bundler == nil {
+			t.Fatal("New() returned nil bundler")
+		}
+		if bundler.Config == nil {
+			t.Fatal("New() bundler has nil config")
+		}
+	})
+
+	t.Run("with config", func(t *testing.T) {
+		cfg := config.NewConfig(
+			config.WithVersion("v1.0.0"),
+		)
+		bundler, err := New(WithConfig(cfg))
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+		if bundler.Config.Version() != "v1.0.0" {
+			t.Errorf("expected version v1.0.0, got %s", bundler.Config.Version())
+		}
+	})
+
+	t.Run("with nil config", func(t *testing.T) {
+		bundler, err := New(WithConfig(nil))
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+		// Should use default config when nil is passed
+		if bundler.Config == nil {
+			t.Fatal("Config should not be nil after passing nil")
+		}
+	})
+}
+
+func TestMake_NilInput(t *testing.T) {
+	bundler, err := New()
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+
+	_, err = bundler.Make(ctx, nil, tmpDir)
+	if err == nil {
+		t.Fatal("expected error for nil input, got nil")
+	}
+	if !strings.Contains(err.Error(), "nil") {
+		t.Errorf("expected error to mention nil, got: %v", err)
+	}
+}
+
+func TestMake_EmptyComponentRefs(t *testing.T) {
+	bundler, err := New()
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+
+	recipeResult := &recipe.RecipeResult{
+		ComponentRefs: []recipe.ComponentRef{},
+	}
+
+	_, err = bundler.Make(ctx, recipeResult, tmpDir)
+	if err == nil {
+		t.Fatal("expected error for empty component refs, got nil")
+	}
+	if !strings.Contains(err.Error(), "component") {
+		t.Errorf("expected error to mention component, got: %v", err)
+	}
+}
+
+func TestMake_Success(t *testing.T) {
+	bundler, err := New()
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+
+	recipeResult := &recipe.RecipeResult{
+		APIVersion: "cns.nvidia.com/v1alpha1",
+		Kind:       "Recipe",
+		Criteria: &recipe.Criteria{
+			Service:     "eks",
+			Accelerator: "gb200",
+			Intent:      "training",
+			OS:          "ubuntu",
+		},
+		ComponentRefs: []recipe.ComponentRef{
+			{
+				Name:    "gpu-operator",
+				Version: "v25.3.3",
+				Type:    "helm",
+				Source:  "https://helm.ngc.nvidia.com/nvidia",
+			},
+			{
+				Name:    "network-operator",
+				Version: "v25.4.0",
+				Type:    "helm",
+				Source:  "https://helm.ngc.nvidia.com/nvidia",
+			},
+		},
+		DeploymentOrder: []string{"gpu-operator", "network-operator"},
+	}
+
+	output, err := bundler.Make(ctx, recipeResult, tmpDir)
+	if err != nil {
+		t.Fatalf("Make() error = %v", err)
+	}
+
+	if output == nil {
+		t.Fatal("Make() returned nil output")
+	}
+
+	// Verify files were created
+	expectedFiles := []string{"Chart.yaml", "values.yaml", "README.md", "recipe.yaml"}
+	for _, filename := range expectedFiles {
+		path := filepath.Join(tmpDir, filename)
+		if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
+			t.Errorf("expected file %s was not created", filename)
+		}
+	}
+
+	// Verify Chart.yaml has dependencies
+	chartContent, err := os.ReadFile(filepath.Join(tmpDir, "Chart.yaml"))
+	if err != nil {
+		t.Fatalf("failed to read Chart.yaml: %v", err)
+	}
+	chartStr := string(chartContent)
+	if !strings.Contains(chartStr, "dependencies:") {
+		t.Error("Chart.yaml should contain dependencies section")
+	}
+	if !strings.Contains(chartStr, "gpu-operator") {
+		t.Error("Chart.yaml should reference gpu-operator")
+	}
+	if !strings.Contains(chartStr, "network-operator") {
+		t.Error("Chart.yaml should reference network-operator")
+	}
+
+	// Verify output summary
+	if output.TotalFiles < 4 {
+		t.Errorf("expected at least 4 files, got %d", output.TotalFiles)
+	}
+}
+
+func TestMake_WithValueOverrides(t *testing.T) {
+	cfg := config.NewConfig(
+		config.WithValueOverrides(map[string]map[string]string{
+			"gpu-operator": {
+				"gds.enabled": "true",
+			},
+		}),
+	)
+	bundler, err := New(WithConfig(cfg))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+
+	recipeResult := &recipe.RecipeResult{
+		APIVersion: "cns.nvidia.com/v1alpha1",
+		Kind:       "Recipe",
+		ComponentRefs: []recipe.ComponentRef{
+			{
+				Name:    "gpu-operator",
+				Version: "v25.3.3",
+				Type:    "helm",
+				Source:  "https://helm.ngc.nvidia.com/nvidia",
+			},
+		},
+	}
+
+	output, err := bundler.Make(ctx, recipeResult, tmpDir)
+	if err != nil {
+		t.Fatalf("Make() error = %v", err)
+	}
+
+	if output == nil {
+		t.Fatal("Make() returned nil output")
+	}
+
+	// Verify values.yaml was created
+	valuesPath := filepath.Join(tmpDir, "values.yaml")
+	if _, err := os.Stat(valuesPath); os.IsNotExist(err) {
+		t.Fatal("values.yaml was not created")
+	}
+}
+
+func TestMake_WithNodeSelectors(t *testing.T) {
+	cfg := config.NewConfig(
+		config.WithSystemNodeSelector(map[string]string{
+			"nodeGroup": "system-pool",
+		}),
+		config.WithAcceleratedNodeSelector(map[string]string{
+			"nvidia.com/gpu.present": "true",
+		}),
+	)
+	bundler, err := New(WithConfig(cfg))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+
+	recipeResult := &recipe.RecipeResult{
+		APIVersion: "cns.nvidia.com/v1alpha1",
+		Kind:       "Recipe",
+		ComponentRefs: []recipe.ComponentRef{
+			{
+				Name:    "gpu-operator",
+				Version: "v25.3.3",
+				Type:    "helm",
+				Source:  "https://helm.ngc.nvidia.com/nvidia",
+			},
+		},
+	}
+
+	output, err := bundler.Make(ctx, recipeResult, tmpDir)
+	if err != nil {
+		t.Fatalf("Make() error = %v", err)
+	}
+
+	if output == nil {
+		t.Fatal("Make() returned nil output")
+	}
+}
+
+func TestMake_WithTolerations(t *testing.T) {
+	cfg := config.NewConfig(
+		config.WithSystemNodeTolerations([]corev1.Toleration{
+			{
+				Key:      "dedicated",
+				Operator: corev1.TolerationOpEqual,
+				Value:    "system",
+				Effect:   corev1.TaintEffectNoSchedule,
+			},
+		}),
+	)
+	bundler, err := New(WithConfig(cfg))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+
+	recipeResult := &recipe.RecipeResult{
+		APIVersion: "cns.nvidia.com/v1alpha1",
+		Kind:       "Recipe",
+		ComponentRefs: []recipe.ComponentRef{
+			{
+				Name:    "gpu-operator",
+				Version: "v25.3.3",
+				Type:    "helm",
+				Source:  "https://helm.ngc.nvidia.com/nvidia",
+			},
+		},
+	}
+
+	output, err := bundler.Make(ctx, recipeResult, tmpDir)
+	if err != nil {
+		t.Fatalf("Make() error = %v", err)
+	}
+
+	if output == nil {
+		t.Fatal("Make() returned nil output")
+	}
+}
+
+func TestMake_ContextCancellation(t *testing.T) {
+	bundler, err := New()
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	tmpDir := t.TempDir()
+
+	recipeResult := &recipe.RecipeResult{
+		APIVersion: "cns.nvidia.com/v1alpha1",
+		Kind:       "Recipe",
+		ComponentRefs: []recipe.ComponentRef{
+			{
+				Name:    "gpu-operator",
+				Version: "v25.3.3",
+				Type:    "helm",
+				Source:  "https://helm.ngc.nvidia.com/nvidia",
+			},
+		},
+	}
+
+	_, err = bundler.Make(ctx, recipeResult, tmpDir)
+	if err == nil {
+		t.Fatal("expected error for cancelled context, got nil")
+	}
+}
+
+func TestMake_DefaultOutputDir(t *testing.T) {
+	bundler, err := New()
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	ctx := context.Background()
+
+	recipeResult := &recipe.RecipeResult{
+		APIVersion: "cns.nvidia.com/v1alpha1",
+		Kind:       "Recipe",
+		ComponentRefs: []recipe.ComponentRef{
+			{
+				Name:    "gpu-operator",
+				Version: "v25.3.3",
+				Type:    "helm",
+				Source:  "https://helm.ngc.nvidia.com/nvidia",
+			},
+		},
+	}
+
+	// Use current working directory
+	originalDir, _ := os.Getwd()
+	tmpDir := t.TempDir()
+	defer os.Chdir(originalDir)
+	os.Chdir(tmpDir)
+
+	output, err := bundler.Make(ctx, recipeResult, "")
+	if err != nil {
+		t.Fatalf("Make() error = %v", err)
+	}
+
+	if output == nil {
+		t.Fatal("Make() returned nil output")
+	}
+}
+
+func TestRemoveHyphens(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"gpu-operator", "gpuoperator"},
+		{"network-operator", "networkoperator"},
+		{"cert-manager", "certmanager"},
+		{"skyhook", "skyhook"},
+		{"", ""},
+		{"a-b-c-d", "abcd"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := removeHyphens(tt.input)
+			if result != tt.expected {
+				t.Errorf("removeHyphens(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestConvertMapValue(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected interface{}
+	}{
+		{"true", true},
+		{"false", false},
+		{"123", int64(123)},
+		{"3.14", 3.14},
+		{"hello", "hello"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := convertMapValue(tt.input)
+			if result != tt.expected {
+				t.Errorf("convertMapValue(%q) = %v (%T), want %v (%T)",
+					tt.input, result, result, tt.expected, tt.expected)
+			}
+		})
+	}
+}
+
+func TestSetMapValueByPath(t *testing.T) {
+	t.Run("simple path", func(t *testing.T) {
+		m := make(map[string]interface{})
+		err := setMapValueByPath(m, "key", "value")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if m["key"] != "value" {
+			t.Errorf("expected key=value, got %v", m["key"])
+		}
+	})
+
+	t.Run("nested path", func(t *testing.T) {
+		m := make(map[string]interface{})
+		err := setMapValueByPath(m, "a.b.c", "value")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		a := m["a"].(map[string]interface{})
+		b := a["b"].(map[string]interface{})
+		if b["c"] != "value" {
+			t.Errorf("expected a.b.c=value, got %v", b["c"])
+		}
+	})
+
+	t.Run("boolean conversion", func(t *testing.T) {
+		m := make(map[string]interface{})
+		err := setMapValueByPath(m, "enabled", "true")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if m["enabled"] != true {
+			t.Errorf("expected enabled=true, got %v", m["enabled"])
+		}
+	})
+}
+
+func TestApplyMapOverrides(t *testing.T) {
+	t.Run("nil target", func(t *testing.T) {
+		err := applyMapOverrides(nil, map[string]string{"key": "value"})
+		if err == nil {
+			t.Fatal("expected error for nil target")
+		}
+	})
+
+	t.Run("empty overrides", func(t *testing.T) {
+		m := make(map[string]interface{})
+		err := applyMapOverrides(m, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("multiple overrides", func(t *testing.T) {
+		m := make(map[string]interface{})
+		err := applyMapOverrides(m, map[string]string{
+			"a":   "1",
+			"b.c": "2",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if m["a"] != int64(1) {
+			t.Errorf("expected a=1, got %v", m["a"])
+		}
+	})
+}

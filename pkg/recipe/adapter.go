@@ -1,0 +1,189 @@
+// Package recipe provides recipe building and matching functionality.
+package recipe
+
+import (
+	"embed"
+	"fmt"
+
+	"gopkg.in/yaml.v3"
+)
+
+//go:embed data/*.yaml data/components/*/*.yaml
+var dataFS embed.FS
+
+// RecipeInput is an interface that both Recipe and RecipeResult implement.
+// This allows bundlers to work with either format during the transition period.
+type RecipeInput interface {
+	// GetComponentRef returns the component reference for a given component name.
+	// Returns nil if the component is not found.
+	GetComponentRef(name string) *ComponentRef
+
+	// GetValuesForComponent returns the values map for a given component.
+	// For Recipe, this extracts values from measurements.
+	// For RecipeResult, this loads values from the component's valuesFile.
+	GetValuesForComponent(name string) (map[string]interface{}, error)
+
+	// GetVersion returns the recipe version (CLI version that generated the recipe).
+	// Returns empty string if version is not available.
+	GetVersion() string
+
+	// GetCriteria returns the criteria used to generate this recipe.
+	// Returns nil if criteria is not available (e.g., for legacy Recipe format).
+	GetCriteria() *Criteria
+}
+
+// Ensure Recipe implements RecipeInput
+var _ RecipeInput = (*Recipe)(nil)
+
+// GetComponentRef returns nil for Recipe (v1 format doesn't have components).
+func (r *Recipe) GetComponentRef(name string) *ComponentRef {
+	return nil
+}
+
+// GetValuesForComponent extracts values from measurements for Recipe.
+// This maintains backward compatibility with the legacy measurements-based format.
+func (r *Recipe) GetValuesForComponent(name string) (map[string]interface{}, error) {
+	// For legacy Recipe, values are embedded in measurements
+	// This is a no-op - bundlers extract their own values from measurements
+	return make(map[string]interface{}), nil
+}
+
+// GetVersion returns the recipe version from metadata.
+func (r *Recipe) GetVersion() string {
+	if r.Metadata == nil {
+		return ""
+	}
+	return r.Metadata["recipe-version"]
+}
+
+// GetCriteria returns nil for Recipe (v1 format doesn't have criteria).
+func (r *Recipe) GetCriteria() *Criteria {
+	return nil
+}
+
+// Ensure RecipeResult implements RecipeInput
+var _ RecipeInput = (*RecipeResult)(nil)
+
+// GetVersion returns the recipe version from metadata.
+func (r *RecipeResult) GetVersion() string {
+	return r.Metadata.Version
+}
+
+// GetCriteria returns the criteria used to generate this recipe result.
+func (r *RecipeResult) GetCriteria() *Criteria {
+	return r.Criteria
+}
+
+// GetComponentRef returns the component reference for a given component name.
+func (r *RecipeResult) GetComponentRef(name string) *ComponentRef {
+	for i := range r.ComponentRefs {
+		if r.ComponentRefs[i].Name == name {
+			return &r.ComponentRefs[i]
+		}
+	}
+	return nil
+}
+
+// GetValuesForComponent loads values from the component's valuesFile and inline overrides.
+// Merge order: base values → ValuesFile → Overrides (highest precedence).
+// This supports three patterns:
+//  1. ValuesFile only: Traditional separate file approach
+//  2. Overrides only: Fully self-contained recipe with inline overrides
+//  3. ValuesFile + Overrides: Hybrid - reusable base with recipe-specific tweaks
+func (r *RecipeResult) GetValuesForComponent(name string) (map[string]interface{}, error) {
+	ref := r.GetComponentRef(name)
+	if ref == nil {
+		return nil, fmt.Errorf("component %q not found in recipe", name)
+	}
+
+	// Start with empty result
+	result := make(map[string]interface{})
+
+	// If no valuesFile and no overrides, return empty map
+	if ref.ValuesFile == "" && len(ref.Overrides) == 0 {
+		return result, nil
+	}
+
+	// Step 1: Load base and/or overlay values from files (if ValuesFile specified)
+	if ref.ValuesFile != "" {
+		// Determine if this is an overlay values file (not the base values.yaml)
+		baseValuesFile := fmt.Sprintf("components/%s/values.yaml", name)
+		isOverlay := ref.ValuesFile != baseValuesFile
+
+		if isOverlay {
+			// Load base values first
+			baseValuesPath := fmt.Sprintf("data/%s", baseValuesFile)
+			baseData, err := dataFS.ReadFile(baseValuesPath)
+			if err != nil {
+				// If base file doesn't exist, that's okay - just use overlay
+				result = make(map[string]interface{})
+			} else {
+				err = yaml.Unmarshal(baseData, &result)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse base values file %q: %w", baseValuesFile, err)
+				}
+			}
+
+			// Load overlay values
+			overlayPath := fmt.Sprintf("data/%s", ref.ValuesFile)
+			overlayData, err := dataFS.ReadFile(overlayPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read overlay values file %q: %w", ref.ValuesFile, err)
+			}
+
+			var overlayValues map[string]interface{}
+			if err := yaml.Unmarshal(overlayData, &overlayValues); err != nil {
+				return nil, fmt.Errorf("failed to parse overlay values file %q: %w", ref.ValuesFile, err)
+			}
+
+			// Merge overlay into base (overlay takes precedence over base)
+			mergeValues(result, overlayValues)
+		} else {
+			// Just load the base values file
+			valuesPath := fmt.Sprintf("data/%s", ref.ValuesFile)
+			data, err := dataFS.ReadFile(valuesPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read values file %q: %w", ref.ValuesFile, err)
+			}
+
+			if err := yaml.Unmarshal(data, &result); err != nil {
+				return nil, fmt.Errorf("failed to parse values file %q: %w", ref.ValuesFile, err)
+			}
+		}
+	}
+
+	// Step 2: Apply inline overrides (highest precedence)
+	if len(ref.Overrides) > 0 {
+		mergeValues(result, ref.Overrides)
+	}
+
+	return result, nil
+}
+
+// mergeValues recursively merges src into dst.
+// For maps, it recursively merges nested keys.
+// For other types, src values override dst values.
+func mergeValues(dst, src map[string]interface{}) {
+	for key, srcVal := range src {
+		if dstVal, exists := dst[key]; exists {
+			// If both are maps, merge recursively
+			if dstMap, dstOK := dstVal.(map[string]interface{}); dstOK {
+				if srcMap, srcOK := srcVal.(map[string]interface{}); srcOK {
+					mergeValues(dstMap, srcMap)
+					continue
+				}
+			}
+			// For non-map or mismatched types, src overrides dst
+			dst[key] = srcVal
+		} else {
+			// Key doesn't exist in dst, add it
+			dst[key] = srcVal
+		}
+	}
+}
+
+// HasComponentRefs checks if the input is a RecipeResult with component references.
+func HasComponentRefs(input RecipeInput) bool {
+	_, ok := input.(*RecipeResult)
+	return ok
+}

@@ -1,0 +1,137 @@
+version: 2
+
+project_name: cns
+
+builds:
+  - id: cnsctl
+    binary: cnsctl
+    mod_timestamp: &build-timestamp '{{ .CommitTimestamp }}'
+    dir: cmd/cnsctl
+    env:
+      - CGO_ENABLED=0
+      - GO111MODULE=on
+    flags:
+      - -trimpath
+    ldflags: &build-ldflags |
+      -w
+      -s
+      -extldflags "-static"
+      -X github.com/NVIDIA/cloud-native-stack/pkg/cli.version={{.Version}}
+      -X github.com/NVIDIA/cloud-native-stack/pkg/cli.commit={{.ShortCommit}}
+      -X github.com/NVIDIA/cloud-native-stack/pkg/cli.date={{.Date}}
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+  - id: cnsd
+    binary: cnsd
+    mod_timestamp: &build-timestamp '{{ .CommitTimestamp }}'
+    dir: cmd/cnsd
+    env:
+      - CGO_ENABLED=0
+      - GO111MODULE=on
+    flags:
+      - -trimpath
+    ldflags: &build-ldflags |
+      -w
+      -s
+      -extldflags "-static"
+      -X github.com/NVIDIA/cloud-native-stack/pkg/api.version={{.Version}}
+      -X github.com/NVIDIA/cloud-native-stack/pkg/api.commit={{.ShortCommit}}
+      -X github.com/NVIDIA/cloud-native-stack/pkg/api.date={{.Date}}
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+universal_binaries:
+  - name_template: "cnsctl"
+    replace: false  # keep platform-specific binaries too
+
+gomod:
+  proxy: false
+
+sboms:
+  - artifacts: binary
+
+checksum:
+  name_template: "{{ .ProjectName }}_checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ .Tag }}-next"
+
+report_sizes: true
+
+metadata:
+  mod_timestamp: "{{ .CommitTimestamp }}"
+
+release:
+  github:
+    owner: mchmarny  # NVIDIA
+    name: cloud-native-stack
+  prerelease: auto
+
+kos:
+  - id: cnsctl
+    build: cnsctl
+    repositories:
+      - ghcr.io/mchmarny/cns
+    base_image: nvcr.io/nvidia/cuda:13.1.0-runtime-ubuntu24.04
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    tags:
+      - latest
+      - "{{.Tag}}"
+    preserve_import_paths: false
+    bare: true
+
+  - id: cnsd
+    build: cnsd
+    repositories:
+      - ghcr.io/mchmarny/cnsd
+    base_image: gcr.io/distroless/static:nonroot
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    tags:
+      - latest
+      - "{{.Tag}}"
+    preserve_import_paths: false
+    bare: true
+
+archives:
+  - id: cnsctl
+    ids:
+      - cnsctl
+    formats:
+      - binary
+    name_template: "{{ .Binary }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^lint:"
+      - "^chore: readme"
+      - "^chore: bump version"
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: "Tasks"
+      regexp: '^.*?chore(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: "Bug fixes"
+      regexp: '^.*?bug(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Others
+      order: 999

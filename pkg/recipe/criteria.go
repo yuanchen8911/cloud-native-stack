@@ -1,0 +1,453 @@
+// Package recipe provides recipe building and matching functionality.
+package recipe
+
+import (
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+)
+
+// criteriaAnyValue is the wildcard value for criteria matching.
+const criteriaAnyValue = "any"
+
+// CriteriaServiceType represents the Kubernetes service/platform type for criteria.
+type CriteriaServiceType string
+
+// CriteriaServiceType constants for supported Kubernetes services.
+const (
+	CriteriaServiceAny CriteriaServiceType = "any"
+	CriteriaServiceEKS CriteriaServiceType = "eks"
+	CriteriaServiceGKE CriteriaServiceType = "gke"
+	CriteriaServiceAKS CriteriaServiceType = "aks"
+	CriteriaServiceOKE CriteriaServiceType = "oke"
+)
+
+// ParseCriteriaServiceType parses a string into a CriteriaServiceType.
+func ParseCriteriaServiceType(s string) (CriteriaServiceType, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", criteriaAnyValue, "self-managed", "self", "vanilla":
+		return CriteriaServiceAny, nil
+	case "eks":
+		return CriteriaServiceEKS, nil
+	case "gke":
+		return CriteriaServiceGKE, nil
+	case "aks":
+		return CriteriaServiceAKS, nil
+	case "oke":
+		return CriteriaServiceOKE, nil
+	default:
+		return CriteriaServiceAny, fmt.Errorf("invalid service type: %s", s)
+	}
+}
+
+// GetCriteriaServiceTypes returns all supported service types sorted alphabetically.
+func GetCriteriaServiceTypes() []string {
+	return []string{"aks", "eks", "gke", "oke"}
+}
+
+// CriteriaAcceleratorType represents the GPU/accelerator type.
+type CriteriaAcceleratorType string
+
+// CriteriaAcceleratorType constants for supported accelerators.
+const (
+	CriteriaAcceleratorAny   CriteriaAcceleratorType = "any"
+	CriteriaAcceleratorH100  CriteriaAcceleratorType = "h100"
+	CriteriaAcceleratorGB200 CriteriaAcceleratorType = "gb200"
+	CriteriaAcceleratorA100  CriteriaAcceleratorType = "a100"
+	CriteriaAcceleratorL40   CriteriaAcceleratorType = "l40"
+)
+
+// ParseCriteriaAcceleratorType parses a string into a CriteriaAcceleratorType.
+func ParseCriteriaAcceleratorType(s string) (CriteriaAcceleratorType, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", criteriaAnyValue:
+		return CriteriaAcceleratorAny, nil
+	case "h100":
+		return CriteriaAcceleratorH100, nil
+	case "gb200":
+		return CriteriaAcceleratorGB200, nil
+	case "a100":
+		return CriteriaAcceleratorA100, nil
+	case "l40":
+		return CriteriaAcceleratorL40, nil
+	default:
+		return CriteriaAcceleratorAny, fmt.Errorf("invalid accelerator type: %s", s)
+	}
+}
+
+// GetCriteriaAcceleratorTypes returns all supported accelerator types sorted alphabetically.
+func GetCriteriaAcceleratorTypes() []string {
+	return []string{"a100", "gb200", "h100", "l40"}
+}
+
+// CriteriaIntentType represents the workload intent.
+type CriteriaIntentType string
+
+// CriteriaIntentType constants for supported workload intents.
+const (
+	CriteriaIntentAny       CriteriaIntentType = "any"
+	CriteriaIntentTraining  CriteriaIntentType = "training"
+	CriteriaIntentInference CriteriaIntentType = "inference"
+)
+
+// ParseCriteriaIntentType parses a string into a CriteriaIntentType.
+func ParseCriteriaIntentType(s string) (CriteriaIntentType, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", criteriaAnyValue:
+		return CriteriaIntentAny, nil
+	case "training":
+		return CriteriaIntentTraining, nil
+	case "inference":
+		return CriteriaIntentInference, nil
+	default:
+		return CriteriaIntentAny, fmt.Errorf("invalid intent type: %s", s)
+	}
+}
+
+// GetCriteriaIntentTypes returns all supported intent types sorted alphabetically.
+func GetCriteriaIntentTypes() []string {
+	return []string{"inference", "training"}
+}
+
+// CriteriaOSType represents an operating system type.
+type CriteriaOSType string
+
+// CriteriaOSType constants for supported operating systems.
+const (
+	CriteriaOSAny         CriteriaOSType = "any"
+	CriteriaOSUbuntu      CriteriaOSType = "ubuntu"
+	CriteriaOSRHEL        CriteriaOSType = "rhel"
+	CriteriaOSCOS         CriteriaOSType = "cos"
+	CriteriaOSAmazonLinux CriteriaOSType = "amazonlinux"
+)
+
+// ParseCriteriaOSType parses a string into a CriteriaOSType.
+func ParseCriteriaOSType(s string) (CriteriaOSType, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", criteriaAnyValue:
+		return CriteriaOSAny, nil
+	case "ubuntu":
+		return CriteriaOSUbuntu, nil
+	case "rhel":
+		return CriteriaOSRHEL, nil
+	case "cos":
+		return CriteriaOSCOS, nil
+	case "amazonlinux", "al2", "al2023":
+		return CriteriaOSAmazonLinux, nil
+	default:
+		return CriteriaOSAny, fmt.Errorf("invalid os type: %s", s)
+	}
+}
+
+// GetCriteriaOSTypes returns all supported OS types sorted alphabetically.
+func GetCriteriaOSTypes() []string {
+	return []string{"amazonlinux", "cos", "rhel", "ubuntu"}
+}
+
+// Criteria represents the input parameters for recipe matching.
+// All fields are optional and default to "any" if not specified.
+type Criteria struct {
+	// Service is the Kubernetes service type (eks, gke, aks, oke, self-managed).
+	Service CriteriaServiceType `json:"service,omitempty" yaml:"service,omitempty"`
+
+	// Accelerator is the GPU/accelerator type (h100, gb200, a100, l40).
+	Accelerator CriteriaAcceleratorType `json:"accelerator,omitempty" yaml:"accelerator,omitempty"`
+
+	// Intent is the workload intent (training, inference).
+	Intent CriteriaIntentType `json:"intent,omitempty" yaml:"intent,omitempty"`
+
+	// OS is the worker node operating system type.
+	OS CriteriaOSType `json:"os,omitempty" yaml:"os,omitempty"`
+
+	// Nodes is the number of worker nodes (0 means any/unspecified).
+	Nodes int `json:"nodes,omitempty" yaml:"nodes,omitempty"`
+}
+
+// NewCriteria creates a new Criteria with all fields set to "any".
+func NewCriteria() *Criteria {
+	return &Criteria{
+		Service:     CriteriaServiceAny,
+		Accelerator: CriteriaAcceleratorAny,
+		Intent:      CriteriaIntentAny,
+		OS:          CriteriaOSAny,
+		Nodes:       0,
+	}
+}
+
+// Matches checks if this recipe criteria matches the given query criteria.
+// Uses asymmetric matching:
+//   - Query "any" (or empty) = ONLY matches recipes that are also "any"/empty for that field
+//   - Recipe "any" (or empty) = wildcard (matches any query value for that field)
+//   - Query specific + Recipe specific = must match exactly
+//
+// This ensures a generic query (e.g., accelerator=any) only matches generic recipes
+// (e.g., accelerator=any), while a specific query (e.g., accelerator=gb200) can match
+// both generic recipes and recipes with that specific value.
+func (c *Criteria) Matches(other *Criteria) bool {
+	if other == nil {
+		return true
+	}
+
+	// Asymmetric matching for each field:
+	// - If query (other) is "any"/empty → only match if recipe is also "any"/empty
+	// - If recipe (c) is "any"/empty → match any query value (recipe is generic)
+	// - Otherwise → must match exactly
+	//
+	// Note: Empty string ("") is treated as equivalent to "any" because when YAML is parsed,
+	// omitted fields get the zero value ("") rather than the "any" constant.
+
+	// Service matching
+	if !matchesCriteriaField(string(c.Service), string(other.Service)) {
+		return false
+	}
+
+	// Accelerator matching
+	if !matchesCriteriaField(string(c.Accelerator), string(other.Accelerator)) {
+		return false
+	}
+
+	// Intent matching
+	if !matchesCriteriaField(string(c.Intent), string(other.Intent)) {
+		return false
+	}
+
+	// OS matching
+	if !matchesCriteriaField(string(c.OS), string(other.OS)) {
+		return false
+	}
+
+	// Nodes: 0 means any - apply same asymmetric logic
+	// Query 0 (any) → only match if recipe is also 0 (generic)
+	// Recipe 0 (any) → match any query value
+	if other.Nodes == 0 && c.Nodes != 0 {
+		// Query is generic but recipe is specific - no match
+		return false
+	}
+	if other.Nodes != 0 && c.Nodes != 0 && c.Nodes != other.Nodes {
+		// Both specific but different values - no match
+		return false
+	}
+
+	return true
+}
+
+// matchesCriteriaField implements asymmetric matching for a single criteria field.
+// Returns true if the recipe field matches the query field.
+//
+// Matching rules:
+//   - Query is "any"/empty → only matches if recipe is also "any"/empty
+//   - Recipe is "any"/empty → matches any query value (recipe is generic/wildcard)
+//   - Otherwise → must match exactly
+func matchesCriteriaField(recipeValue, queryValue string) bool {
+	recipeIsAny := recipeValue == criteriaAnyValue || recipeValue == ""
+	queryIsAny := queryValue == criteriaAnyValue || queryValue == ""
+
+	// If recipe is "any", it matches any query value (recipe is generic)
+	if recipeIsAny {
+		return true
+	}
+
+	// Recipe has a specific value
+	// Query must also have that specific value (not "any")
+	if queryIsAny {
+		// Query is generic but recipe is specific - no match
+		return false
+	}
+
+	// Both have specific values - must match exactly
+	return recipeValue == queryValue
+}
+
+// Specificity returns a score indicating how specific this criteria is.
+// Higher scores mean more specific criteria (fewer "any" fields).
+// Used for ordering overlay application - more specific overlays are applied later.
+func (c *Criteria) Specificity() int {
+	score := 0
+	if c.Service != CriteriaServiceAny {
+		score++
+	}
+	if c.Accelerator != CriteriaAcceleratorAny {
+		score++
+	}
+	if c.Intent != CriteriaIntentAny {
+		score++
+	}
+	if c.OS != CriteriaOSAny {
+		score++
+	}
+	if c.Nodes != 0 {
+		score++
+	}
+	return score
+}
+
+// String returns a human-readable representation of the criteria.
+func (c *Criteria) String() string {
+	parts := []string{}
+	if c.Service != CriteriaServiceAny {
+		parts = append(parts, fmt.Sprintf("service=%s", c.Service))
+	}
+	if c.Accelerator != CriteriaAcceleratorAny {
+		parts = append(parts, fmt.Sprintf("accelerator=%s", c.Accelerator))
+	}
+	if c.Intent != CriteriaIntentAny {
+		parts = append(parts, fmt.Sprintf("intent=%s", c.Intent))
+	}
+	if c.OS != CriteriaOSAny {
+		parts = append(parts, fmt.Sprintf("os=%s", c.OS))
+	}
+	if c.Nodes != 0 {
+		parts = append(parts, fmt.Sprintf("nodes=%d", c.Nodes))
+	}
+	if len(parts) == 0 {
+		return "criteria(any)"
+	}
+	return fmt.Sprintf("criteria(%s)", strings.Join(parts, ", "))
+}
+
+// CriteriaOption is a functional option for building Criteria.
+type CriteriaOption func(*Criteria) error
+
+// WithCriteriaService sets the service type.
+func WithCriteriaService(s string) CriteriaOption {
+	return func(c *Criteria) error {
+		st, err := ParseCriteriaServiceType(s)
+		if err != nil {
+			return err
+		}
+		c.Service = st
+		return nil
+	}
+}
+
+// WithCriteriaAccelerator sets the accelerator type.
+func WithCriteriaAccelerator(s string) CriteriaOption {
+	return func(c *Criteria) error {
+		at, err := ParseCriteriaAcceleratorType(s)
+		if err != nil {
+			return err
+		}
+		c.Accelerator = at
+		return nil
+	}
+}
+
+// WithCriteriaIntent sets the intent type.
+func WithCriteriaIntent(s string) CriteriaOption {
+	return func(c *Criteria) error {
+		it, err := ParseCriteriaIntentType(s)
+		if err != nil {
+			return err
+		}
+		c.Intent = it
+		return nil
+	}
+}
+
+// WithCriteriaOS sets the OS type.
+func WithCriteriaOS(s string) CriteriaOption {
+	return func(c *Criteria) error {
+		ot, err := ParseCriteriaOSType(s)
+		if err != nil {
+			return err
+		}
+		c.OS = ot
+		return nil
+	}
+}
+
+// WithCriteriaNodes sets the number of nodes.
+func WithCriteriaNodes(n int) CriteriaOption {
+	return func(c *Criteria) error {
+		if n < 0 {
+			return fmt.Errorf("invalid nodes count: %d (must be >= 0)", n)
+		}
+		c.Nodes = n
+		return nil
+	}
+}
+
+// BuildCriteria creates a Criteria from functional options.
+func BuildCriteria(opts ...CriteriaOption) (*Criteria, error) {
+	c := NewCriteria()
+	for _, opt := range opts {
+		if err := opt(c); err != nil {
+			return nil, err
+		}
+	}
+	return c, nil
+}
+
+// ParseCriteriaFromRequest parses recipe criteria from HTTP query parameters.
+// All parameters are optional and default to "any" if not specified.
+// Supported parameters: service, accelerator (alias: gpu), intent, os, nodes.
+func ParseCriteriaFromRequest(r *http.Request) (*Criteria, error) {
+	if r == nil {
+		return nil, fmt.Errorf("request cannot be nil")
+	}
+
+	q := r.URL.Query()
+	return ParseCriteriaFromValues(q)
+}
+
+// ParseCriteriaFromValues parses recipe criteria from URL values.
+// All parameters are optional and default to "any" if not specified.
+// Supported parameters: service, accelerator (alias: gpu), intent, os, nodes.
+func ParseCriteriaFromValues(values url.Values) (*Criteria, error) {
+	c := NewCriteria()
+
+	// Parse service
+	if s := values.Get("service"); s != "" {
+		st, err := ParseCriteriaServiceType(s)
+		if err != nil {
+			return nil, err
+		}
+		c.Service = st
+	}
+
+	// Parse accelerator (also accept "gpu" as alias for backwards compatibility)
+	accelParam := values.Get("accelerator")
+	if accelParam == "" {
+		accelParam = values.Get("gpu")
+	}
+	if accelParam != "" {
+		at, err := ParseCriteriaAcceleratorType(accelParam)
+		if err != nil {
+			return nil, err
+		}
+		c.Accelerator = at
+	}
+
+	// Parse intent
+	if s := values.Get("intent"); s != "" {
+		it, err := ParseCriteriaIntentType(s)
+		if err != nil {
+			return nil, err
+		}
+		c.Intent = it
+	}
+
+	// Parse OS
+	if s := values.Get("os"); s != "" {
+		ot, err := ParseCriteriaOSType(s)
+		if err != nil {
+			return nil, err
+		}
+		c.OS = ot
+	}
+
+	// Parse nodes count
+	if s := values.Get("nodes"); s != "" {
+		var n int
+		if _, err := fmt.Sscanf(s, "%d", &n); err != nil {
+			return nil, fmt.Errorf("invalid nodes value: %s", s)
+		}
+		if n < 0 {
+			return nil, fmt.Errorf("invalid nodes count: %d (must be >= 0)", n)
+		}
+		c.Nodes = n
+	}
+
+	return c, nil
+}

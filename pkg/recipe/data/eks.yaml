@@ -1,0 +1,17 @@
+kind: recipeMetadata
+apiVersion: cns.nvidia.com/v1alpha1
+metadata:
+  name: eks
+
+spec:
+  # Inherits from base (implicit when spec.base is empty)
+  # This recipe contains EKS-specific settings shared by all EKS deployments
+
+  criteria:
+    service: eks
+
+  # EKS-specific constraints
+  # Constraint names use fully qualified measurement paths: {type}.{subtype}.{key}
+  constraints:
+    - name: K8s.server.version
+      value: ">= 1.28"

@@ -1,0 +1,102 @@
+name: Feature Request
+description: Suggest a new feature or enhancement
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+
+body:
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I searched existing issues
+          required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Feature Summary
+      description: Brief description of the feature
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem/Use Case
+      description: What problem does this solve?
+      placeholder: Describe what you're trying to accomplish and current limitations
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How should this feature work?
+    validations:
+      required: true
+
+  - type: textarea
+    id: success
+    attributes:
+      label: Success Criteria
+      description: What does “done” look like? How should we measure success?
+      placeholder: |
+        - Must support ...
+        - Must not break ...
+        - CLI/API output should ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What other options/workarounds have you tried or considered?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - CLI
+        - API server
+        - Recipe engine / data
+        - Bundlers
+        - Collectors / snapshotter
+        - Deployment/Config
+        - Docs/examples
+        - New Component
+        - Multiple Components
+    validations:
+      required: true
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility / Breaking Changes
+      description: Any expected breaking changes, migrations, or versioning concerns?
+    validations:
+      required: false
+
+  - type: textarea
+    id: ops
+    attributes:
+      label: Operational Considerations
+      description: Observability, upgrades, config drift, multi-tenancy, blast radius.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Are you willing to contribute?
+      options:
+        - Yes, I can open a PR
+        - Maybe, with guidance
+        - No
+    validations:
+      required: true

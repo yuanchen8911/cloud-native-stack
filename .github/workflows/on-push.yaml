@@ -1,0 +1,44 @@
+name: on_push
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+  security-events: write
+
+jobs:
+
+  test:
+    name: Test Code
+    runs-on: ubuntu-latest
+    env:
+      GO_VERSION: '1.25'
+      LINTER_VERSION: '1.53.3'
+      GOLANGCI_LINT_VERSION: v2.6
+      SCAN_SEVERITY: 'MEDIUM'
+    steps:
+
+      - name: Checkout Code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      # Setup, Test, and Lint
+      - name: Run Go CI (setup, test, lint)
+        uses: ./.github/actions/go-ci
+        with:
+          go_version: '${{ env.GO_VERSION }}'
+          golangci_lint_version: '${{ env.GOLANGCI_LINT_VERSION }}'
+          upload_codecov: 'true'
+
+      # Scan for Vulnerabilities
+      - name: Security Scan
+        uses: ./.github/actions/security-scan
+        with:
+          severity: ${{ env.SCAN_SEVERITY }}
+          category: 'trivy-fs'

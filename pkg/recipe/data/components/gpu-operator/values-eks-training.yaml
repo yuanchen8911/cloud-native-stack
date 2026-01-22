@@ -1,0 +1,8 @@
+# GPU Operator Helm values
+# EKS Training configuration overrides
+
+cdi:
+  enabled: true
+  default: false
+hostPaths:
+  driverInstallDir: /run/nvidia/driver
