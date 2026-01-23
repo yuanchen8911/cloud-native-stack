@@ -236,7 +236,7 @@ type bundleParams struct {
 	systemNodeTolerations      []corev1.Toleration
 	acceleratedNodeSelector    map[string]string
 	acceleratedNodeTolerations []corev1.Toleration
-	deployer                   string
+	deployer                   config.DeployerType
 	repoURL                    string
 }
 
@@ -277,8 +277,16 @@ func parseQueryParams(r *http.Request) (*bundleParams, error) {
 		return nil, cnserrors.Wrap(cnserrors.ErrCodeInvalidRequest, "Invalid accelerated-node-toleration", err)
 	}
 
-	// Parse deployer (script, argocd, flux)
-	params.deployer = query.Get("deployer")
+	// Parse deployer type (helm, argocd)
+	deployerStr := query.Get("deployer")
+	if deployerStr == "" {
+		params.deployer = config.DeployerHelm // default
+	} else {
+		params.deployer, err = config.ParseDeployerType(deployerStr)
+		if err != nil {
+			return nil, cnserrors.Wrap(cnserrors.ErrCodeInvalidRequest, "Invalid deployer parameter", err)
+		}
+	}
 
 	// Parse repo URL (for ArgoCD deployer)
 	params.repoURL = query.Get("repo")

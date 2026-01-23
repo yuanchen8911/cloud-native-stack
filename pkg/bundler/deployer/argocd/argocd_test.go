@@ -1,0 +1,377 @@
+/*
+Copyright © 2025 NVIDIA Corporation
+SPDX-License-Identifier: Apache-2.0
+*/
+
+package argocd
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/NVIDIA/cloud-native-stack/pkg/recipe"
+)
+
+const testVersion = "v1.0.0"
+
+func TestNewGenerator(t *testing.T) {
+	g := NewGenerator()
+	if g == nil {
+		t.Fatal("NewGenerator() returned nil")
+	}
+}
+
+func TestGenerate_Success(t *testing.T) {
+	g := NewGenerator()
+	ctx := context.Background()
+	outputDir := t.TempDir()
+
+	recipeResult := &recipe.RecipeResult{}
+	recipeResult.Metadata.Version = testVersion
+	recipeResult.ComponentRefs = []recipe.ComponentRef{
+		{
+			Name:    "cert-manager",
+			Version: "v1.17.2",
+			Type:    "helm",
+			Source:  "https://charts.jetstack.io",
+		},
+		{
+			Name:    "gpu-operator",
+			Version: "v25.3.3",
+			Type:    "helm",
+			Source:  "https://helm.ngc.nvidia.com/nvidia",
+		},
+	}
+	recipeResult.DeploymentOrder = []string{"cert-manager", "gpu-operator"}
+
+	input := &GeneratorInput{
+		RecipeResult: recipeResult,
+		ComponentValues: map[string]map[string]interface{}{
+			"cert-manager": {
+				"installCRDs": true,
+			},
+			"gpu-operator": {
+				"driver": map[string]interface{}{
+					"enabled": true,
+				},
+			},
+		},
+		Version: "v0.9.0",
+	}
+
+	output, err := g.Generate(ctx, input, outputDir)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	// Verify output
+	if output == nil {
+		t.Fatal("Generate() returned nil output")
+	}
+
+	if len(output.Files) == 0 {
+		t.Error("Generate() returned no files")
+	}
+
+	if output.TotalSize == 0 {
+		t.Error("Generate() returned zero total size")
+	}
+
+	if output.Duration == 0 {
+		t.Error("Generate() returned zero duration")
+	}
+
+	// Verify expected files exist
+	expectedFiles := []string{
+		"cert-manager/application.yaml",
+		"cert-manager/values.yaml",
+		"gpu-operator/application.yaml",
+		"gpu-operator/values.yaml",
+		"app-of-apps.yaml",
+		"README.md",
+	}
+
+	for _, relPath := range expectedFiles {
+		fullPath := filepath.Join(outputDir, relPath)
+		if _, statErr := os.Stat(fullPath); os.IsNotExist(statErr) {
+			t.Errorf("Expected file %s does not exist", relPath)
+		}
+	}
+
+	// Verify cert-manager application has sync-wave 0
+	certManagerApp := filepath.Join(outputDir, "cert-manager", "application.yaml")
+	content, err := os.ReadFile(certManagerApp)
+	if err != nil {
+		t.Fatalf("Failed to read cert-manager application: %v", err)
+	}
+	if !strings.Contains(string(content), "sync-wave: \"0\"") {
+		t.Error("cert-manager application should have sync-wave 0")
+	}
+
+	// Verify gpu-operator application has sync-wave 1
+	gpuOperatorApp := filepath.Join(outputDir, "gpu-operator", "application.yaml")
+	content, err = os.ReadFile(gpuOperatorApp)
+	if err != nil {
+		t.Fatalf("Failed to read gpu-operator application: %v", err)
+	}
+	if !strings.Contains(string(content), "sync-wave: \"1\"") {
+		t.Error("gpu-operator application should have sync-wave 1")
+	}
+
+	// Verify README contains component information
+	readmePath := filepath.Join(outputDir, "README.md")
+	content, err = os.ReadFile(readmePath)
+	if err != nil {
+		t.Fatalf("Failed to read README: %v", err)
+	}
+	if !strings.Contains(string(content), "cert-manager") {
+		t.Error("README should contain cert-manager")
+	}
+	if !strings.Contains(string(content), "gpu-operator") {
+		t.Error("README should contain gpu-operator")
+	}
+}
+
+func TestGenerate_NilInput(t *testing.T) {
+	g := NewGenerator()
+	ctx := context.Background()
+	outputDir := t.TempDir()
+
+	_, err := g.Generate(ctx, nil, outputDir)
+	if err == nil {
+		t.Fatal("Generate() should return error for nil input")
+	}
+}
+
+func TestGenerate_NilRecipeResult(t *testing.T) {
+	g := NewGenerator()
+	ctx := context.Background()
+	outputDir := t.TempDir()
+
+	input := &GeneratorInput{
+		RecipeResult: nil,
+		Version:      "v0.9.0",
+	}
+
+	_, err := g.Generate(ctx, input, outputDir)
+	if err == nil {
+		t.Fatal("Generate() should return error for nil recipe result")
+	}
+}
+
+func TestGenerate_EmptyComponents(t *testing.T) {
+	g := NewGenerator()
+	ctx := context.Background()
+	outputDir := t.TempDir()
+
+	recipeResult := &recipe.RecipeResult{}
+	recipeResult.Metadata.Version = testVersion
+	recipeResult.ComponentRefs = []recipe.ComponentRef{}
+
+	input := &GeneratorInput{
+		RecipeResult: recipeResult,
+		Version:      "v0.9.0",
+	}
+
+	output, err := g.Generate(ctx, input, outputDir)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	// Should still generate app-of-apps and README
+	expectedFiles := []string{
+		"app-of-apps.yaml",
+		"README.md",
+	}
+
+	for _, relPath := range expectedFiles {
+		fullPath := filepath.Join(outputDir, relPath)
+		if _, statErr := os.Stat(fullPath); os.IsNotExist(statErr) {
+			t.Errorf("Expected file %s does not exist", relPath)
+		}
+	}
+
+	// Verify file count
+	if len(output.Files) != 2 {
+		t.Errorf("Expected 2 files, got %d", len(output.Files))
+	}
+}
+
+func TestGenerate_WithRepoURL(t *testing.T) {
+	g := NewGenerator()
+	ctx := context.Background()
+	outputDir := t.TempDir()
+
+	customRepoURL := "https://github.com/my-org/my-gitops-repo.git"
+
+	recipeResult := &recipe.RecipeResult{}
+	recipeResult.Metadata.Version = testVersion
+	recipeResult.ComponentRefs = []recipe.ComponentRef{
+		{
+			Name:    "gpu-operator",
+			Version: "v25.3.3",
+			Type:    "helm",
+			Source:  "https://helm.ngc.nvidia.com/nvidia",
+		},
+	}
+
+	input := &GeneratorInput{
+		RecipeResult: recipeResult,
+		Version:      "v0.9.0",
+		RepoURL:      customRepoURL,
+	}
+
+	_, err := g.Generate(ctx, input, outputDir)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	// Verify app-of-apps contains custom repo URL
+	appOfAppsPath := filepath.Join(outputDir, "app-of-apps.yaml")
+	content, err := os.ReadFile(appOfAppsPath)
+	if err != nil {
+		t.Fatalf("Failed to read app-of-apps.yaml: %v", err)
+	}
+	if !strings.Contains(string(content), customRepoURL) {
+		t.Error("app-of-apps.yaml should contain custom repo URL")
+	}
+}
+
+func TestGenerate_ContextCancellation(t *testing.T) {
+	g := NewGenerator()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	outputDir := t.TempDir()
+
+	recipeResult := &recipe.RecipeResult{}
+	recipeResult.Metadata.Version = testVersion
+	recipeResult.ComponentRefs = []recipe.ComponentRef{
+		{
+			Name:    "gpu-operator",
+			Version: "v25.3.3",
+			Type:    "helm",
+			Source:  "https://helm.ngc.nvidia.com/nvidia",
+		},
+	}
+
+	input := &GeneratorInput{
+		RecipeResult: recipeResult,
+		Version:      "v0.9.0",
+	}
+
+	_, err := g.Generate(ctx, input, outputDir)
+	if err == nil {
+		t.Fatal("Generate() should return error for cancelled context")
+	}
+}
+
+func TestSortComponentsByDeploymentOrder(t *testing.T) {
+	tests := []struct {
+		name     string
+		refs     []recipe.ComponentRef
+		order    []string
+		expected []string
+	}{
+		{
+			name: "ordered",
+			refs: []recipe.ComponentRef{
+				{Name: "gpu-operator"},
+				{Name: "cert-manager"},
+				{Name: "network-operator"},
+			},
+			order:    []string{"cert-manager", "gpu-operator", "network-operator"},
+			expected: []string{"cert-manager", "gpu-operator", "network-operator"},
+		},
+		{
+			name: "empty order",
+			refs: []recipe.ComponentRef{
+				{Name: "gpu-operator"},
+				{Name: "cert-manager"},
+			},
+			order:    []string{},
+			expected: []string{"gpu-operator", "cert-manager"},
+		},
+		{
+			name: "partial order",
+			refs: []recipe.ComponentRef{
+				{Name: "gpu-operator"},
+				{Name: "cert-manager"},
+				{Name: "network-operator"},
+			},
+			order:    []string{"cert-manager"},
+			expected: []string{"cert-manager", "gpu-operator", "network-operator"},
+		},
+		{
+			name: "component not in order goes last",
+			refs: []recipe.ComponentRef{
+				{Name: "unknown"},
+				{Name: "gpu-operator"},
+			},
+			order:    []string{"gpu-operator"},
+			expected: []string{"gpu-operator", "unknown"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := sortComponentsByDeploymentOrder(tt.refs, tt.order)
+
+			if len(result) != len(tt.expected) {
+				t.Fatalf("Expected %d components, got %d", len(tt.expected), len(result))
+			}
+
+			for i, name := range tt.expected {
+				if result[i].Name != name {
+					t.Errorf("Position %d: expected %s, got %s", i, name, result[i].Name)
+				}
+			}
+		})
+	}
+}
+
+func TestGetNamespace(t *testing.T) {
+	tests := []struct {
+		component string
+		expected  string
+	}{
+		{"gpu-operator", "gpu-operator"},
+		{"network-operator", "nvidia-network-operator"},
+		{"cert-manager", "cert-manager"},
+		{"unknown-component", defaultNamespace},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.component, func(t *testing.T) {
+			comp := recipe.ComponentRef{Name: tt.component}
+			ns := getNamespace(comp)
+			if ns != tt.expected {
+				t.Errorf("getNamespace(%s) = %s, want %s", tt.component, ns, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNormalizeVersion(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"v1.0.0", "1.0.0"},
+		{"1.0.0", "1.0.0"},
+		{"v25.3.3", "25.3.3"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := normalizeVersion(tt.input)
+			if result != tt.expected {
+				t.Errorf("normalizeVersion(%s) = %s, want %s", tt.input, result, tt.expected)
+			}
+		})
+	}
+}

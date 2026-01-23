@@ -2,25 +2,56 @@ package config
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 )
 
+// DeployerType represents the type of deployment method used for generated bundles.
+type DeployerType string
+
+// Supported deployer types.
+const (
+	// DeployerHelm generates Helm umbrella charts (default).
+	DeployerHelm DeployerType = "helm"
+	// DeployerArgoCD generates ArgoCD App of Apps manifests.
+	DeployerArgoCD DeployerType = "argocd"
+)
+
+// ParseDeployerType parses a string into a DeployerType.
+// Returns an error if the string is not a valid deployer type.
+func ParseDeployerType(s string) (DeployerType, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case string(DeployerHelm):
+		return DeployerHelm, nil
+	case string(DeployerArgoCD):
+		return DeployerArgoCD, nil
+	default:
+		return "", fmt.Errorf("invalid deployer type %q: must be one of %v", s, GetDeployerTypes())
+	}
+}
+
+// GetDeployerTypes returns a sorted slice of all supported deployer types.
+// This is useful for CLI flag validation and usage messages.
+func GetDeployerTypes() []string {
+	types := []string{
+		string(DeployerHelm),
+		string(DeployerArgoCD),
+	}
+	sort.Strings(types)
+	return types
+}
+
+// String returns the string representation of the DeployerType.
+func (d DeployerType) String() string {
+	return string(d)
+}
+
 // Config provides immutable configuration options for bundlers.
 // All fields are read-only after creation to prevent accidental modifications.
 // Use Clone() to create a modified copy or Merge() to combine configurations.
 type Config struct {
-	// outputFormat specifies the format for generated files.
-	// Supported: "yaml", "json", "helm"
-	outputFormat string
-
-	// compression enables tar.gz compression of the bundle.
-	compression bool
-
-	// includeScripts includes installation and setup scripts.
-	includeScripts bool
-
 	// includeReadme includes README documentation.
 	includeReadme bool
 
@@ -49,29 +80,14 @@ type Config struct {
 	// acceleratedNodeTolerations contains tolerations for accelerated/GPU nodes.
 	acceleratedNodeTolerations []corev1.Toleration
 
-	// deployer specifies the deployment method: "helm" (default) or "argocd".
-	deployer string
+	// deployer specifies the deployment method (default: DeployerHelm).
+	deployer DeployerType
 
 	// repoURL specifies the Git repository URL for ArgoCD applications.
 	repoURL string
 }
 
 // Getter methods for read-only access
-
-// OutputFormat returns the output format setting.
-func (c *Config) OutputFormat() string {
-	return c.outputFormat
-}
-
-// Compression returns the compression setting.
-func (c *Config) Compression() bool {
-	return c.compression
-}
-
-// IncludeScripts returns the include scripts setting.
-func (c *Config) IncludeScripts() bool {
-	return c.includeScripts
-}
 
 // IncludeReadme returns the include readme setting.
 func (c *Config) IncludeReadme() bool {
@@ -152,8 +168,8 @@ func (c *Config) AcceleratedNodeTolerations() []corev1.Toleration {
 	return result
 }
 
-// Deployer returns the deployment method ("helm" or "argocd").
-func (c *Config) Deployer() string {
+// Deployer returns the deployment method (DeployerHelm or DeployerArgoCD).
+func (c *Config) Deployer() DeployerType {
 	return c.deployer
 }
 
@@ -164,37 +180,10 @@ func (c *Config) RepoURL() string {
 
 // Validate checks if the Config has valid settings.
 func (c *Config) Validate() error {
-	validFormats := map[string]bool{"yaml": true, "json": true, "helm": true}
-	if !validFormats[c.outputFormat] {
-		return fmt.Errorf("invalid output format: %s (must be yaml, json, or helm)",
-			c.outputFormat)
-	}
-
 	return nil
 }
 
 type Option func(*Config)
-
-// WithOutputFormat sets the output format for the bundler (yaml, json, helm).
-func WithOutputFormat(format string) Option {
-	return func(c *Config) {
-		c.outputFormat = format
-	}
-}
-
-// WithCompression sets whether compression is enabled for the bundler.
-func WithCompression(enabled bool) Option {
-	return func(c *Config) {
-		c.compression = enabled
-	}
-}
-
-// WithIncludeScripts sets whether installation and uninstallation scripts should be included in the bundle.
-func WithIncludeScripts(enabled bool) Option {
-	return func(c *Config) {
-		c.includeScripts = enabled
-	}
-}
 
 // WithIncludeReadme sets whether a README should be included in the bundle.
 func WithIncludeReadme(enabled bool) Option {
@@ -290,8 +279,8 @@ func WithAcceleratedNodeTolerations(tolerations []corev1.Toleration) Option {
 	}
 }
 
-// WithDeployer sets the deployment method ("helm" or "argocd").
-func WithDeployer(deployer string) Option {
+// WithDeployer sets the deployment method.
+func WithDeployer(deployer DeployerType) Option {
 	return func(c *Config) {
 		c.deployer = deployer
 	}
@@ -307,12 +296,9 @@ func WithRepoURL(repoURL string) Option {
 // NewConfig returns a Config with default values.
 func NewConfig(options ...Option) *Config {
 	c := &Config{
-		compression:      false,
-		deployer:         "helm",
+		deployer:         DeployerHelm,
 		includeChecksums: true,
 		includeReadme:    true,
-		includeScripts:   true,
-		outputFormat:     "yaml",
 		valueOverrides:   make(map[string]map[string]string),
 		verbose:          false,
 		version:          "dev",

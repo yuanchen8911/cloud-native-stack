@@ -5,18 +5,18 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "{{ .SyncWave }}"
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
-  source:
-    repoURL: {{ .Repository }}
-    chart: {{ .Chart }}
-    targetRevision: {{ .Version }}
-    helm:
-      releaseName: {{ .Name }}
-      valueFiles:
-        - values.yaml
+  sources:
+    - repoURL: {{ .Repository }}
+      chart: {{ .Chart }}
+      targetRevision: {{ .Version }}
+      helm:
+        valueFiles:
+          - $values/{{ .Name }}/values.yaml
+    - repoURL: '{{ `{{ .RepoURL }}` }}'
+      targetRevision: main
+      ref: values
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ .Namespace }}
@@ -26,4 +26,3 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - ServerSideApply=true

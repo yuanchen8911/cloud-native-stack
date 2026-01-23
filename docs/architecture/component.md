@@ -146,16 +146,7 @@ func (b *Bundler) Make(ctx context.Context, input recipe.RecipeInput, dir string
         }
     }
     
-    // 11. Generate scripts
-    if b.Config.IncludeScripts() {
-        installPath := filepath.Join(dirs.Root, "scripts", "install.sh")
-        if err := b.GenerateFileFromTemplate(ctx, GetTemplate, "install.sh",
-            installPath, scriptData, 0755); err != nil {
-            return b.Result, err
-        }
-    }
-    
-    // 12. Generate checksums
+    // 11. Generate checksums
     if b.Config.IncludeChecksums() {
         if err := b.GenerateChecksums(ctx, dirs.Root); err != nil {
             return b.Result, errors.Wrap(errors.ErrCodeInternal,
@@ -163,7 +154,7 @@ func (b *Bundler) Make(ctx context.Context, input recipe.RecipeInput, dir string
         }
     }
     
-    // 13. Finalize bundle generation
+    // 12. Finalize bundle generation
     b.Finalize(start)
     
     return b.Result, nil

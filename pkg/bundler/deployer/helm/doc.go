@@ -3,7 +3,7 @@ Copyright © 2025 NVIDIA Corporation
 SPDX-License-Identifier: Apache-2.0
 */
 
-// Package umbrella generates Helm umbrella charts from recipe results.
+// Package helm generates Helm umbrella charts from recipe results.
 //
 // An umbrella chart is a Helm chart that uses dependencies to deploy multiple
 // sub-charts in a single release. This approach provides:
@@ -18,15 +18,16 @@ SPDX-License-Identifier: Apache-2.0
 //	output-dir/
 //	├── Chart.yaml    # Chart metadata with dependencies
 //	├── values.yaml   # Combined values for all components
-//	└── README.md     # Deployment instructions
+//	├── README.md     # Deployment instructions
+//	└── checksums.txt # SHA256 checksums (optional)
 //
 // Usage:
 //
-//	generator := umbrella.NewGenerator()
-//	input := &umbrella.GeneratorInput{
+//	generator := helm.NewGenerator()
+//	input := &helm.GeneratorInput{
 //	    RecipeResult:    recipeResult,
-//	    ComponentValues: map[string]map[string]interface{}{...},
-//	    Version:         "v1.0.0",
+//	    ComponentValues: componentValues,
+//	    Version:         "1.0.0",
 //	}
-//	output, err := generator.Generate(ctx, input, "./output")
-package umbrella
+//	output, err := generator.Generate(ctx, input, "/path/to/output")
+package helm

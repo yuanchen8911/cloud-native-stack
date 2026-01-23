@@ -61,7 +61,7 @@ Use custom configuration:
 
 	cfg := config.NewConfig(
 		config.WithNamespace("gpu-operator"),
-		config.WithIncludeScripts(true),
+		config.WithIncludeReadme(true),
 	)
 
 	b, err := bundler.New(bundler.WithConfig(cfg))
@@ -149,18 +149,12 @@ Stop on first error:
 
 Customize bundler behavior with config.Config:
 
-	cfg := config.NewConfig()
-	cfg.OutputFormat = "yaml"          // Output format: yaml, json, helm
-	cfg.Namespace = "gpu-operator"      // Kubernetes namespace
-	cfg.IncludeScripts = true           // Generate install/uninstall scripts
-	cfg.IncludeReadme = true            // Generate README documentation
-	cfg.IncludeChecksums = true         // Generate SHA256 checksums
-	cfg.Compression = false             // Enable tar.gz compression
-	cfg.Verbose = false                 // Enable verbose logging
-
-	// Custom labels and annotations
-	cfg.CustomLabels["environment"] = "production"
-	cfg.CustomAnnotations["owner"] = "platform-team"
+	cfg := config.NewConfig(
+	    config.WithDeployer(config.DeployerHelm), // Deployment method: helm, argocd
+	    config.WithIncludeReadme(true),           // Generate README documentation
+	    config.WithIncludeChecksums(true),        // Generate SHA256 checksums
+	    config.WithVerbose(false),                // Enable verbose logging
+	)
 
 	b, err := bundler.New(bundler.WithConfig(cfg))
 	if err != nil {

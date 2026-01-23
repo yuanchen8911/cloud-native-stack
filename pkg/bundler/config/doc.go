@@ -7,14 +7,20 @@
 // # Configuration Options
 //
 // Config controls bundler behavior through various settings:
-//   - OutputFormat: Output format (yaml, json, helm)
-//   - Compression: Enable gzip compression
-//   - IncludeScripts: Generate installation/uninstallation scripts
+//   - Deployer: Deployment method (DeployerHelm or DeployerArgoCD)
 //   - IncludeReadme: Generate deployment documentation
 //   - IncludeChecksums: Generate SHA256 checksums.txt file
 //   - Version: Bundler version string
 //   - ValueOverrides: Per-bundler value overrides from CLI --set flags
 //   - Verbose: Enable verbose output
+//
+// # Deployer Types
+//
+// The DeployerType constants define the supported deployment methods:
+//   - DeployerHelm: Generates Helm umbrella charts (default)
+//   - DeployerArgoCD: Generates ArgoCD App of Apps manifests
+//
+// Use ParseDeployerType() to parse user input and GetDeployerTypes() for CLI help.
 //
 // # Usage
 //
@@ -25,24 +31,22 @@
 // Customize with functional options:
 //
 //	cfg := config.NewConfig(
-//	    config.WithOutputFormat("yaml"),
-//	    config.WithIncludeScripts(true),
+//	    config.WithDeployer(config.DeployerHelm),
 //	    config.WithIncludeChecksums(true),
 //	    config.WithVersion("v1.0.0"),
 //	)
 //
 // Access configuration:
 //
-//	if cfg.IncludeScripts() {
-//	    // Generate scripts
+//	if cfg.IncludeReadme() {
+//	    // Generate README
 //	}
 //	version := cfg.Version()
 //
 // # Default Values
 //
 // The default configuration includes:
-//   - OutputFormat: "yaml"
-//   - IncludeScripts: true
+//   - Deployer: "helm"
 //   - IncludeReadme: true
 //   - IncludeChecksums: true
 //   - Version: "dev"
@@ -65,8 +69,8 @@
 //	}
 //
 //	func (b *MyBundler) Make(ctx context.Context, r *recipe.Recipe, outputDir string) (*result.Result, error) {
-//	    if b.cfg.IncludeScripts() {
-//	        // Generate scripts
+//	    if b.cfg.IncludeReadme() {
+//	        // Generate README
 //	    }
 //	    // ...
 //	}
@@ -78,8 +82,8 @@
 //	}
 //
 //	func (b *MyBundler) Make(ctx context.Context, r *recipe.Recipe, outputDir string) (*result.Result, error) {
-//	    if b.Config.IncludeScripts() {
-//	        // Generate scripts
+//	    if b.Config.IncludeChecksums() {
+//	        // Generate checksums
 //	    }
 //	    // ...
 //	}

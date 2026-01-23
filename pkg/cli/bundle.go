@@ -25,9 +25,6 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-// deployerArgoCD is the ArgoCD deployer type.
-const deployerArgoCD = "argocd"
-
 // OCI output constants.
 const (
 	defaultOCITag = "latest"
@@ -40,7 +37,7 @@ type bundleCmdOptions struct {
 	recipeFilePath             string
 	outputDir                  string
 	kubeconfig                 string
-	deployer                   string
+	deployer                   config.DeployerType
 	repoURL                    string
 	valueOverrides             map[string]map[string]string
 	systemNodeSelector         map[string]string
@@ -88,15 +85,21 @@ func parseBundleCmdOptions(cmd *cli.Command) (*bundleCmdOptions, error) {
 	opts := &bundleCmdOptions{
 		recipeFilePath: cmd.String("recipe"),
 		kubeconfig:     cmd.String("kubeconfig"),
-		deployer:       cmd.String("deployer"),
 		repoURL:        cmd.String("repo"),
 		insecureTLS:    cmd.Bool("insecure-tls"),
 		plainHTTP:      cmd.Bool("plain-http"),
 	}
 
-	// Validate deployer flag
-	if opts.deployer != "" && opts.deployer != deployerArgoCD {
-		return nil, fmt.Errorf("invalid --deployer value: %q (must be '' or 'argocd')", opts.deployer)
+	// Parse and validate deployer flag using strongly-typed parser
+	deployerStr := cmd.String("deployer")
+	if deployerStr == "" {
+		opts.deployer = config.DeployerHelm
+	} else {
+		deployer, err := config.ParseDeployerType(deployerStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid --deployer value: %w", err)
+		}
+		opts.deployer = deployer
 	}
 
 	// Parse output target (detects oci:// URI or local directory)
@@ -191,20 +194,7 @@ Set node selectors for GPU workloads:
 
 Package and push bundle to OCI registry:
   cnsctl bundle --recipe recipe.yaml --output oci://ghcr.io/nvidia/cns-bundle:v1.0.0
-
-# Deployment (Helm)
-
-After generating the Helm bundle, deploy using:
-  cd my-bundle
-  helm dependency update
-  helm install cns-stack . -n cns-system --create-namespace
-
-# Deployment (ArgoCD)
-
-After generating the ArgoCD bundle:
-  1. Push the generated files to your GitOps repository
-  2. Apply the app-of-apps.yaml to your ArgoCD cluster:
-     kubectl apply -f app-of-apps.yaml`,
+`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "recipe",
@@ -244,8 +234,8 @@ After generating the ArgoCD bundle:
 			&cli.StringFlag{
 				Name:    "deployer",
 				Aliases: []string{"d"},
-				Value:   "",
-				Usage:   "Deployment method: '' (default Helm umbrella chart) or 'argocd' (App of Apps pattern)",
+				Value:   string(config.DeployerHelm),
+				Usage:   fmt.Sprintf("Deployment method: %v", config.GetDeployerTypes()),
 			},
 			&cli.StringFlag{
 				Name:  "repo",
@@ -269,11 +259,12 @@ After generating the ArgoCD bundle:
 				return err
 			}
 
-			outputType := "umbrella chart"
-			if opts.deployer == deployerArgoCD {
+			outputType := "Helm umbrella chart"
+			if opts.deployer == config.DeployerArgoCD {
 				outputType = "ArgoCD applications"
 			}
 			slog.Info("generating bundle",
+				slog.String("deployer", opts.deployer.String()),
 				slog.String("type", outputType),
 				slog.String("recipe", opts.recipeFilePath),
 				slog.String("output", opts.outputDir),
@@ -346,8 +337,8 @@ After generating the ArgoCD bundle:
 }
 
 // printBundleDeploymentInstructions prints user-friendly deployment instructions.
-func printBundleDeploymentInstructions(deployer, repoURL string, out *result.Output) {
-	if deployer == deployerArgoCD {
+func printBundleDeploymentInstructions(deployer config.DeployerType, repoURL string, out *result.Output) {
+	if deployer == config.DeployerArgoCD {
 		fmt.Printf("\nArgoCD applications generated successfully!\n")
 		fmt.Printf("Output directory: %s\n", out.OutputDir)
 		fmt.Printf("Files generated: %d\n", out.TotalFiles)
@@ -367,7 +358,7 @@ func printBundleDeploymentInstructions(deployer, repoURL string, out *result.Out
 		fmt.Printf("\nTo deploy:\n")
 		fmt.Printf("  cd %s\n", out.OutputDir)
 		fmt.Printf("  helm dependency update\n")
-		fmt.Printf("  helm install cns-stack . -n cns-system --create-namespace\n")
+		fmt.Printf("  helm install cns-stack .\n")
 	}
 }
 

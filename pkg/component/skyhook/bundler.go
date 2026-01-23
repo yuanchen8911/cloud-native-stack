@@ -126,13 +126,6 @@ func (b *Bundler) makeFromRecipeResult(ctx context.Context, input recipe.RecipeI
 		}
 	}
 
-	// Generate install/uninstall scripts
-	if b.Config.IncludeScripts() {
-		if err := b.generateScriptsFromData(ctx, scriptData, dirs.Root); err != nil {
-			return b.Result, err
-		}
-	}
-
 	// Generate customization manifests if specified in values
 	if err := b.generateCustomizationManifests(ctx, values, scriptData, dirs.Root); err != nil {
 		return b.Result, err
@@ -163,21 +156,6 @@ func (b *Bundler) generateReadmeFromData(ctx context.Context, data map[string]in
 	filePath := filepath.Join(dir, "README.md")
 	return b.GenerateFileFromTemplate(ctx, GetTemplate, "README.md",
 		filePath, data, 0644)
-}
-
-// generateScriptsFromData generates install/uninstall scripts from pre-built data.
-func (b *Bundler) generateScriptsFromData(ctx context.Context, scriptData *ScriptData, dir string) error {
-	// Generate install script
-	installPath := filepath.Join(dir, "scripts", "install.sh")
-	if err := b.GenerateFileFromTemplate(ctx, GetTemplate, "install.sh",
-		installPath, scriptData, 0755); err != nil {
-		return err
-	}
-
-	// Generate uninstall script
-	uninstallPath := filepath.Join(dir, "scripts", "uninstall.sh")
-	return b.GenerateFileFromTemplate(ctx, GetTemplate, "uninstall.sh",
-		uninstallPath, scriptData, 0755)
 }
 
 // getValueOverrides extracts value overrides for this bundler from config.

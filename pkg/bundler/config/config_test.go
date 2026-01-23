@@ -13,26 +13,12 @@ func TestConfigImmutability(t *testing.T) {
 	cfg := NewConfig()
 
 	// Verify getters return expected default values
-	outputFormat := cfg.OutputFormat()
-	if outputFormat != "yaml" {
-		t.Errorf("OutputFormat() = %s, want yaml", outputFormat)
-	}
-
-	// Verify getters return expected default values
-	if !cfg.IncludeScripts() {
-		t.Error("IncludeScripts() = false, want true")
-	}
-
 	if !cfg.IncludeReadme() {
 		t.Error("IncludeReadme() = false, want true")
 	}
 
 	if !cfg.IncludeChecksums() {
 		t.Error("IncludeChecksums() = false, want true")
-	}
-
-	if cfg.Compression() {
-		t.Error("Compression() = true, want false")
 	}
 
 	if cfg.Verbose() {
@@ -51,28 +37,6 @@ func TestConfigValidate(t *testing.T) {
 			config:  NewConfig(),
 			wantErr: false,
 		},
-		{
-			name:    "valid yaml format",
-			config:  NewConfig(WithOutputFormat("yaml")),
-			wantErr: false,
-		},
-		{
-			name:    "valid json format",
-			config:  NewConfig(WithOutputFormat("json")),
-			wantErr: false,
-		},
-		{
-			name:    "valid helm format",
-			config:  NewConfig(WithOutputFormat("helm")),
-			wantErr: false,
-		},
-		{
-			name: "invalid output format",
-			config: &Config{
-				outputFormat: "invalid",
-			},
-			wantErr: true,
-		},
 	}
 
 	for _, tt := range tests {
@@ -87,23 +51,14 @@ func TestConfigValidate(t *testing.T) {
 
 func TestNewConfigWithOptions(t *testing.T) {
 	cfg := NewConfig(
-		WithOutputFormat("json"),
-		WithCompression(true),
-		WithIncludeScripts(false),
 		WithIncludeReadme(false),
 		WithIncludeChecksums(false),
 		WithVerbose(true),
 	)
 
 	// Verify all options were applied
-	if cfg.OutputFormat() != "json" {
-		t.Errorf("OutputFormat() = %s, want json", cfg.OutputFormat())
-	}
-	if !cfg.Compression() {
-		t.Error("Compression() = false, want true")
-	}
-	if cfg.IncludeScripts() {
-		t.Error("IncludeScripts() = true, want false")
+	if cfg.IncludeReadme() {
+		t.Error("IncludeReadme() = true, want false")
 	}
 	if cfg.IncludeReadme() {
 		t.Error("IncludeReadme() = true, want false")
@@ -118,9 +73,6 @@ func TestNewConfigWithOptions(t *testing.T) {
 
 func TestAllGetters(t *testing.T) {
 	cfg := NewConfig(
-		WithOutputFormat("helm"),
-		WithCompression(true),
-		WithIncludeScripts(false),
 		WithIncludeReadme(true),
 		WithIncludeChecksums(false),
 		WithVerbose(true),
@@ -132,9 +84,6 @@ func TestAllGetters(t *testing.T) {
 		want     interface{}
 		getterFn string
 	}{
-		{"OutputFormat", cfg.OutputFormat(), "helm", "OutputFormat()"},
-		{"Compression", cfg.Compression(), true, "Compression()"},
-		{"IncludeScripts", cfg.IncludeScripts(), false, "IncludeScripts()"},
 		{"IncludeReadme", cfg.IncludeReadme(), true, "IncludeReadme()"},
 		{"IncludeChecksums", cfg.IncludeChecksums(), false, "IncludeChecksums()"},
 		{"Verbose", cfg.Verbose(), true, "Verbose()"},
@@ -226,37 +175,6 @@ func TestValueOverridesNil(t *testing.T) {
 	got := cfg.ValueOverrides()
 	if len(got) > 0 {
 		t.Errorf("ValueOverrides() = %v, want nil or empty", got)
-	}
-}
-
-func TestValidateErrorMessages(t *testing.T) {
-	tests := []struct {
-		name            string
-		config          *Config
-		wantErrContains string
-	}{
-		{
-			name: "invalid format error message",
-			config: &Config{
-				outputFormat: "xml",
-			},
-			wantErrContains: "invalid output format: xml",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate()
-			if err == nil {
-				t.Fatal("Validate() error = nil, want error")
-			}
-			if tt.wantErrContains != "" {
-				errMsg := err.Error()
-				if len(errMsg) < len(tt.wantErrContains) || errMsg[:len(tt.wantErrContains)] != tt.wantErrContains {
-					t.Errorf("Validate() error = %q, want error containing %q", errMsg, tt.wantErrContains)
-				}
-			}
-		})
 	}
 }
 
@@ -387,15 +305,15 @@ func TestNodeTolerationOptions(t *testing.T) {
 func TestDeployerOptions(t *testing.T) {
 	t.Run("default deployer is helm", func(t *testing.T) {
 		cfg := NewConfig()
-		if cfg.Deployer() != "helm" {
-			t.Errorf("Deployer() = %s, want helm", cfg.Deployer())
+		if cfg.Deployer() != DeployerHelm {
+			t.Errorf("Deployer() = %s, want %s", cfg.Deployer(), DeployerHelm)
 		}
 	})
 
 	t.Run("WithDeployer sets argocd", func(t *testing.T) {
-		cfg := NewConfig(WithDeployer("argocd"))
-		if cfg.Deployer() != "argocd" {
-			t.Errorf("Deployer() = %s, want argocd", cfg.Deployer())
+		cfg := NewConfig(WithDeployer(DeployerArgoCD))
+		if cfg.Deployer() != DeployerArgoCD {
+			t.Errorf("Deployer() = %s, want %s", cfg.Deployer(), DeployerArgoCD)
 		}
 	})
 
@@ -504,4 +422,84 @@ func TestParseValueOverrides(t *testing.T) {
 			t.Errorf("result[bundler][path] = %s, want value=with=equals", result["bundler"]["path"])
 		}
 	})
+}
+
+func TestParseDeployerType(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    DeployerType
+		wantErr bool
+	}{
+		{"helm lowercase", "helm", DeployerHelm, false},
+		{"helm uppercase", "HELM", DeployerHelm, false},
+		{"helm mixed case", "Helm", DeployerHelm, false},
+		{"argocd lowercase", "argocd", DeployerArgoCD, false},
+		{"argocd uppercase", "ARGOCD", DeployerArgoCD, false},
+		{"argocd mixed case", "ArgoCD", DeployerArgoCD, false},
+		{"helm with spaces", "  helm  ", DeployerHelm, false},
+		{"invalid type", "invalid", "", true},
+		{"empty string", "", "", true},
+		{"flux not supported", "flux", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseDeployerType(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseDeployerType(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("ParseDeployerType(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetDeployerTypes(t *testing.T) {
+	types := GetDeployerTypes()
+
+	// Verify we get the expected types
+	if len(types) != 2 {
+		t.Errorf("GetDeployerTypes() returned %d types, want 2", len(types))
+	}
+
+	// Verify types are sorted alphabetically
+	for i := 1; i < len(types); i++ {
+		if types[i-1] > types[i] {
+			t.Errorf("GetDeployerTypes() not sorted: %v", types)
+			break
+		}
+	}
+
+	// Verify expected types are present
+	found := make(map[string]bool)
+	for _, dt := range types {
+		found[dt] = true
+	}
+	if !found[string(DeployerArgoCD)] {
+		t.Error("GetDeployerTypes() missing 'argocd'")
+	}
+	if !found[string(DeployerHelm)] {
+		t.Error("GetDeployerTypes() missing 'helm'")
+	}
+}
+
+func TestDeployerTypeString(t *testing.T) {
+	tests := []struct {
+		dt   DeployerType
+		want string
+	}{
+		{DeployerHelm, "helm"},
+		{DeployerArgoCD, "argocd"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			if got := tt.dt.String(); got != tt.want {
+				t.Errorf("DeployerType.String() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

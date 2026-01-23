@@ -17,10 +17,10 @@ import (
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/argocd"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
+	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/deployer/argocd"
+	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/deployer/helm"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/result"
-	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/umbrella"
 	"github.com/NVIDIA/cloud-native-stack/pkg/errors"
 	"github.com/NVIDIA/cloud-native-stack/pkg/recipe"
 )
@@ -139,7 +139,7 @@ func (b *DefaultBundler) Make(ctx context.Context, input recipe.RecipeInput, dir
 
 	// Route based on deployer
 	deployer := b.Config.Deployer()
-	if deployer == "argocd" {
+	if deployer == config.DeployerArgoCD {
 		return b.makeArgoCD(ctx, recipeResult, componentValues, dir, start)
 	}
 	return b.makeUmbrellaChart(ctx, recipeResult, componentValues, dir, start)
@@ -153,8 +153,8 @@ func (b *DefaultBundler) makeUmbrellaChart(ctx context.Context, recipeResult *re
 	)
 
 	// Generate umbrella chart
-	generator := umbrella.NewGenerator()
-	generatorInput := &umbrella.GeneratorInput{
+	generator := helm.NewGenerator()
+	generatorInput := &helm.GeneratorInput{
 		RecipeResult:     recipeResult,
 		ComponentValues:  componentValues,
 		Version:          b.Config.Version(),

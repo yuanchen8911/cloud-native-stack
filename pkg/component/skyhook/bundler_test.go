@@ -59,12 +59,6 @@ func TestBundler_Make(t *testing.T) {
 					t.Errorf("Expected values.yaml not found")
 				}
 
-				// Verify install script
-				installPath := filepath.Join(bundleDir, "scripts/install.sh")
-				if _, err := os.Stat(installPath); os.IsNotExist(err) {
-					t.Errorf("Expected scripts/install.sh not found")
-				}
-
 				// Verify README
 				readmePath := filepath.Join(bundleDir, "README.md")
 				if _, err := os.Stat(readmePath); os.IsNotExist(err) {
