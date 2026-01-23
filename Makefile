@@ -140,7 +140,7 @@ clean: ## Cleans directories
 
 .PHONY: demos
 demos: ## Creates demos GIF using VHS tool
-	vhs docs/demos/videos/e2e.tape -o docs/demos/videos/e2e.gif
+	vhs docs/demos/videos/cli.tape -o docs/demos/videos/cli.gif
 
 .PHONY: help
 help: ## Displays available commands

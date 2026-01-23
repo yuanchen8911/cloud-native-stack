@@ -88,6 +88,7 @@ func NewWithConfig(cfg *config.Config) (*DefaultBundler, error) {
 //   - values.yaml: Combined values for all components
 //   - README.md: Deployment instructions
 //   - recipe.yaml: Copy of the input recipe
+//   - checksums.txt: SHA256 checksums of generated files
 //
 // For ArgoCD output:
 //   - app-of-apps.yaml: Parent ArgoCD Application
@@ -154,9 +155,10 @@ func (b *DefaultBundler) makeUmbrellaChart(ctx context.Context, recipeResult *re
 	// Generate umbrella chart
 	generator := umbrella.NewGenerator()
 	generatorInput := &umbrella.GeneratorInput{
-		RecipeResult:    recipeResult,
-		ComponentValues: componentValues,
-		Version:         b.Config.Version(),
+		RecipeResult:     recipeResult,
+		ComponentValues:  componentValues,
+		Version:          b.Config.Version(),
+		IncludeChecksums: b.Config.IncludeChecksums(),
 	}
 
 	output, err := generator.Generate(ctx, generatorInput, dir)

@@ -131,6 +131,69 @@ func TestGenerate_ContextCancellation(t *testing.T) {
 	}
 }
 
+func TestGenerate_WithChecksums(t *testing.T) {
+	g := NewGenerator()
+	ctx := context.Background()
+	outputDir := t.TempDir()
+
+	input := &GeneratorInput{
+		RecipeResult: createTestRecipeResult(),
+		ComponentValues: map[string]map[string]interface{}{
+			"cert-manager": {"installCRDs": true},
+			"gpu-operator": {"enabled": true},
+		},
+		Version:          "v1.0.0",
+		IncludeChecksums: true,
+	}
+
+	output, err := g.Generate(ctx, input, outputDir)
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+
+	// Should have 4 files: Chart.yaml, values.yaml, README.md, checksums.txt
+	if len(output.Files) != 4 {
+		t.Errorf("expected 4 files, got %d", len(output.Files))
+	}
+
+	// Check checksums.txt exists
+	checksumPath := filepath.Join(outputDir, "checksums.txt")
+	if _, statErr := os.Stat(checksumPath); os.IsNotExist(statErr) {
+		t.Error("checksums.txt does not exist")
+	}
+
+	// Verify checksums.txt content
+	checksumContent, err := os.ReadFile(checksumPath)
+	if err != nil {
+		t.Fatalf("failed to read checksums.txt: %v", err)
+	}
+	content := string(checksumContent)
+
+	// Should contain hashes for the 3 main files
+	if !strings.Contains(content, "Chart.yaml") {
+		t.Error("checksums.txt missing Chart.yaml")
+	}
+	if !strings.Contains(content, "values.yaml") {
+		t.Error("checksums.txt missing values.yaml")
+	}
+	if !strings.Contains(content, "README.md") {
+		t.Error("checksums.txt missing README.md")
+	}
+
+	// Each line should have 64-char SHA256 hash
+	lines := strings.Split(strings.TrimSpace(content), "\n")
+	for _, line := range lines {
+		parts := strings.Split(line, "  ")
+		if len(parts) != 2 {
+			t.Errorf("invalid checksum format: %s", line)
+			continue
+		}
+		if len(parts[0]) != 64 {
+			t.Errorf("expected 64 char hash, got %d: %s", len(parts[0]), parts[0])
+		}
+	}
+}
+
 func TestNormalizeVersion(t *testing.T) {
 	tests := []struct {
 		input    string

@@ -48,6 +48,7 @@ const (
 //   - values.yaml: Combined values for all components
 //   - README.md: Deployment instructions
 //   - recipe.yaml: Copy of the input recipe
+//   - checksums.txt: SHA256 checksums of generated files
 //
 // Example:
 //

@@ -19,6 +19,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/checksum"
 	"github.com/NVIDIA/cloud-native-stack/pkg/errors"
 	"github.com/NVIDIA/cloud-native-stack/pkg/recipe"
 )
@@ -62,6 +63,9 @@ type GeneratorInput struct {
 
 	// Version is the chart version (from CLI/bundler version).
 	Version string
+
+	// IncludeChecksums indicates whether to generate a checksums.txt file.
+	IncludeChecksums bool
 }
 
 // GeneratorOutput contains the result of umbrella chart generation.
@@ -128,6 +132,20 @@ func (g *Generator) Generate(ctx context.Context, input *GeneratorInput, outputD
 	}
 	output.Files = append(output.Files, readmePath)
 	output.TotalSize += readmeSize
+
+	// Generate checksums.txt if requested
+	if input.IncludeChecksums {
+		if err := checksum.GenerateChecksums(ctx, outputDir, output.Files); err != nil {
+			return nil, errors.Wrap(errors.ErrCodeInternal,
+				"failed to generate checksums", err)
+		}
+		checksumPath := checksum.GetChecksumFilePath(outputDir)
+		info, statErr := os.Stat(checksumPath)
+		if statErr == nil {
+			output.Files = append(output.Files, checksumPath)
+			output.TotalSize += info.Size()
+		}
+	}
 
 	output.Duration = time.Since(start)
 

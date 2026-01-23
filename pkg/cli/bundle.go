@@ -164,6 +164,7 @@ a Helm umbrella chart. Use --deployer argocd to generate ArgoCD Applications.
   - values.yaml: Combined values for all components
   - README.md: Deployment instructions
   - recipe.yaml: Copy of the input recipe for reference
+  - checksums.txt: SHA256 checksums of generated files
 
 # ArgoCD Output (--deployer argocd)
 

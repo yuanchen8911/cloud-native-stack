@@ -261,22 +261,15 @@ The recipe (RecipeResult) directly in the body:
 
 **Success Response (200 OK):**
 
-Returns a binary zip archive containing the generated bundles. The archive structure:
+Returns a binary zip archive containing a Helm umbrella chart. The archive structure:
 
 ```
 bundles.zip
-├── gpu-operator/
-│   ├── values.yaml
-│   ├── manifests/
-│   │   └── clusterpolicy.yaml
-│   ├── scripts/
-│   │   ├── install.sh
-│   │   └── uninstall.sh
-│   ├── README.md
-│   └── checksums.txt
-└── network-operator/
-    ├── values.yaml
-    └── ...
+├── Chart.yaml                   # Helm chart metadata with component dependencies
+├── values.yaml                  # Combined values for all components
+├── README.md                    # Deployment instructions
+├── recipe.yaml                  # Copy of the input recipe for reference
+└── checksums.txt                # SHA256 checksums of generated files
 ```
 
 **Error Responses:**

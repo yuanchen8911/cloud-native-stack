@@ -1,9 +1,5 @@
 # VHS Demo: Cloud Native Stack End-to-End Workflow
-# Based on docs/demos/tape-script.md
-#
 # Run with: vhs docs/demos/videos/e2e.tape -o docs/demos/videos/e2e.gif
-
-Output docs/demos/videos/e2e.gif
 
 # Terminal settings
 Set Shell "bash"

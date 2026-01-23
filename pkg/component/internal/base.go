@@ -2,8 +2,6 @@ package internal
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,6 +10,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/checksum"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/result"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/types"
@@ -134,39 +133,16 @@ func (b *BaseBundler) RenderAndWriteTemplate(tmplContent, name, outputPath strin
 // The checksum file contains SHA256 hashes for verification of bundle integrity.
 // Each line follows the format: "<hash>  <relative-path>"
 func (b *BaseBundler) GenerateChecksums(ctx context.Context, bundleDir string) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("context cancelled: %w", err)
+	if err := checksum.GenerateChecksums(ctx, bundleDir, b.Result.Files); err != nil {
+		return err
 	}
 
-	checksums := make([]string, 0, len(b.Result.Files))
-
-	for _, file := range b.Result.Files {
-		data, err := os.ReadFile(file)
-		if err != nil {
-			return fmt.Errorf("failed to read %s for checksum: %w", file, err)
-		}
-
-		hash := sha256.Sum256(data)
-		relPath, err := filepath.Rel(bundleDir, file)
-		if err != nil {
-			// If relative path fails, use absolute path
-			relPath = file
-		}
-
-		checksums = append(checksums, fmt.Sprintf("%s  %s", hex.EncodeToString(hash[:]), relPath))
+	// Add checksums.txt to the result files
+	checksumPath := checksum.GetChecksumFilePath(bundleDir)
+	info, err := os.Stat(checksumPath)
+	if err == nil {
+		b.Result.AddFile(checksumPath, info.Size())
 	}
-
-	checksumPath := filepath.Join(bundleDir, "checksums.txt")
-	content := strings.Join(checksums, "\n") + "\n"
-
-	if err := b.WriteFileString(checksumPath, content, 0644); err != nil {
-		return fmt.Errorf("failed to write checksums: %w", err)
-	}
-
-	slog.Debug("checksums generated",
-		"file_count", len(checksums),
-		"path", checksumPath,
-	)
 
 	return nil
 }
