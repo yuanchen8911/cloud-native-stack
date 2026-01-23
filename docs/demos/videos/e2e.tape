@@ -1,173 +1,170 @@
 # VHS Demo: Cloud Native Stack End-to-End Workflow
-# Based on docs/demos/e2e.md
+# Based on docs/demos/tape-script.md
 #
 # Run with: vhs docs/demos/videos/e2e.tape -o docs/demos/videos/e2e.gif
-#
-# NOTE: Uses `head` to limit long outputs so they display from the top
 
 Output docs/demos/videos/e2e.gif
 
+# Terminal settings
 Set Shell "bash"
-Set FontSize 22
+Set FontSize 18
 Set Width 1400
-Set Height 800
+Set Height 850
+Set Padding 10
 Set WindowBar Colorful
-Set Margin 20
+Set Margin 10
 Set MarginFill "#674EFF"
-Set BorderRadius 10
+Set BorderRadius 5
+
+# Animation settings
+Set TypingSpeed 50ms
+Set Framerate 30
+Set LoopOffset 0%
 
 # Welcome
 Type "# Cloud Native Stack: End-to-End Demo"
 Enter
 Sleep 2s
-Type "clear"
-Enter
+Ctrl+l
+Sleep 500ms
 
-# Step 1: Recipe from CLI
+# Recipe from CLI
 Type "# Recipe from CLI"
 Enter
-Sleep 1s
-Type@60ms "cnsctl recipe \\"
-Enter
-Type@60ms "  --service eks \\"
-Enter
-Type@60ms "  --accelerator gb200 \\"
-Enter
-Type@60ms "  --os ubuntu \\"
-Enter
-Type@60ms "  --intent training"
-Enter
 Sleep 500ms
-Sleep 4s
-Type "clear"
+Type "cnsctl recipe --service eks --intent training"
 Enter
+Sleep 3s
+Ctrl+l
+Sleep 500ms
 
-# Step 2: Recipe from API
+# Recipe from API
 Type "# Recipe from API"
 Enter
-Sleep 1s
-Type@60ms 'curl -s "https://cns.dgxc.io/v1/recipe?service=eks&accelerator=gb200&intent=training" | jq . | head -50'
+Sleep 500ms
+Type 'curl -s "https://cns.dgxc.io/v1/recipe?service=eks&accelerator=gb200&intent=training" | jq .'
 Enter
-Sleep 4s
-Type "clear"
-Enter
+Sleep 3s
+Ctrl+l
+Sleep 500ms
 
-# Step 3: Make Snapshot (deploy agent)
-Type "# Make Snapshot"
+# Make Snapshot (deploy agent)
+Type "# Make Snapshot from Cluster"
 Enter
-Sleep 1s
-Type@60ms "cnsctl snapshot \\"
+Sleep 500ms
+Type "cnsctl snapshot \"
 Enter
-Type@60ms "    --deploy-agent \\"
+Type "    --deploy-agent \"
 Enter
-Type@60ms "    --namespace gpu-operator \\"
+Type "    --namespace gpu-operator \"
 Enter
-Type@60ms "    --image ghcr.io/mchmarny/cns:latest \\"
+Type "    --image ghcr.io/mchmarny/cns:latest \"
 Enter
-Type@60ms "    --node-selector nodeGroup=customer-gpu"
+Type "    --node-selector nodeGroup=customer-gpu"
 Enter
-Sleep 4s
-Type "clear"
-Enter
+Sleep 8s
+Ctrl+l
+Sleep 500ms
 
-# Step 4: Check Snapshot in ConfigMap
+# Check Snapshot in ConfigMap
 Type "# Check Snapshot in ConfigMap"
 Enter
-Sleep 1s
-Type@60ms "kubectl -n gpu-operator get cm cns-snapshot -o jsonpath='{.data.snapshot\\.yaml}' | yq . | head -40"
+Sleep 500ms
+Type "kubectl -n gpu-operator get cm cns-snapshot -o jsonpath='{.data.snapshot\.yaml}' | yq ."
 Enter
-Sleep 4s
-Type "clear"
-Enter
+Sleep 5s
+Ctrl+l
+Sleep 500ms
 
-# Step 5: Recipe from Snapshot
+# Recipe from Snapshot
 Type "# Recipe from Snapshot"
 Enter
-Sleep 1s
-Type@60ms "cnsctl recipe \\"
+Sleep 500ms
+Type "cnsctl recipe \"
 Enter
-Type@60ms "  --snapshot cm://gpu-operator/cns-snapshot \\"
+Type "  --snapshot cm://gpu-operator/cns-snapshot \"
 Enter
-Type@60ms "  --intent training \\"
+Type "  --intent training \"
 Enter
-Type@60ms "  --output recipe.yaml"
+Type "  --output recipe.yaml"
 Enter
-Sleep 3s
-Type "clear"
-Enter
+Sleep 5s
+Ctrl+l
+Sleep 500ms
 
-# Step 6: Recipe Constraints
+# Recipe Constraints
 Type "# Recipe Constraints"
 Enter
-Sleep 1s
-Type "cat recipe.yaml | yq .constraints"
-Enter
-Sleep 3s
-Type "clear"
-Enter
-
-# Step 7: Validate Recipe
-Type "# Validate Recipe"
-Enter
-Sleep 1s
-Type@60ms "cnsctl validate \\"
-Enter
-Type@60ms "  --recipe recipe.yaml \\"
-Enter
-Type@60ms "  --snapshot cm://gpu-operator/cns-snapshot"
-Enter
-Sleep 4s
-Type "clear"
-Enter
-
-# Step 8: Bundle from Recipe
-Type "# Bundle from Recipe"
-Enter
-Sleep 1s
-Type@60ms "cnsctl bundle \\"
-Enter
-Type@60ms "  --recipe recipe.yaml \\"
-Enter
-Type@60ms "  --output ./bundles \\"
-Enter
-Type@60ms "  --system-node-selector nodeGroup=system-pool \\"
-Enter
-Type@60ms "  --accelerated-node-selector nodeGroup=customer-gpu \\"
-Enter
-Type@60ms "  --accelerated-node-toleration nvidia.com/gpu=present:NoSchedule"
-Enter
-Sleep 4s
-Type "clear"
-Enter
-
-# Step 9: Check bundle content
-Type "# Check bundle content"
-Enter
-Sleep 1s
-Type "tree ./bundles"
-Enter
-Sleep 4s
-Type "clear"
-Enter
-
-# Step 10: Bundle from API
-Type "# Bundle from Recipe using API"
-Enter
-Sleep 1s
-Type@60ms 'curl -s "https://cns.dgxc.io/v1/recipe?service=eks&accelerator=h100&intent=training" | \'
-Enter
-Type@60ms '  curl -X POST "https://cns.dgxc.io/v1/bundle?deployer=argocd" \'
-Enter
-Type@60ms '    -H "Content-Type: application/json" -d @- -o bundles.zip'
+Sleep 500ms
+Type "yq .constraints recipe.yaml"
 Enter
 Sleep 2s
-Type "unzip -l archive.zip"
+Ctrl+l
+Sleep 500ms
+
+# Validate Recipe
+Type "# Validate Constraints against Cluster"
 Enter
-Sleep 3s
-Type "clear"
+Sleep 500ms
+Type "cnsctl validate \"
 Enter
+Type "  --recipe recipe.yaml \"
+Enter
+Type "  --snapshot cm://gpu-operator/cns-snapshot | yq ."
+Enter
+Sleep 5s
+Ctrl+l
+Sleep 500ms
+
+# Bundle from Recipe
+Type "# Create Bundle from Recipe"
+Enter
+Sleep 500ms
+Type "cnsctl bundle \"
+Enter
+Type "  --recipe recipe.yaml \"
+Enter
+Type "  --output ./bundles \"
+Enter
+Type "  --system-node-selector nodeGroup=system-pool \"
+Enter
+Type "  --accelerated-node-selector nodeGroup=customer-gpu \"
+Enter
+Type "  --accelerated-node-toleration nvidia.com/gpu=present:NoSchedule"
+Enter
+Sleep 7s
+Ctrl+l
+Sleep 500ms
+
+# Bundle from API
+Type "# Bundle from API"
+Enter
+Sleep 500ms
+Type 'curl -s "https://cns.dgxc.io/v1/recipe?service=eks&accelerator=h100&intent=training" | \'
+Enter
+Type '  curl -X POST "https://cns.dgxc.io/v1/bundle" \'
+Enter
+Type '    -H "Content-Type: application/json" -d @- -o bundles.zip'
+Enter
+Sleep 2s
+Ctrl+l
+Sleep 500ms
+
+# Chart dependencies
+Type "# Review Bundle and validate chart dependencies"
+Enter
+Sleep 500ms
+Type "cd ./bundles && tree ."
+Enter
+Sleep 1s
+Type "helm dependency update"
+Enter
+Sleep 13s
+Ctrl+l
+Sleep 500ms
 
 # Done
-Type "# Demo complete! Visit: https://github.com/mchmarny/cloud-native-stack/tree/main"
+Type "# Demo Complete!"
 Enter
-Sleep 3s
+Sleep 5s
+Hide

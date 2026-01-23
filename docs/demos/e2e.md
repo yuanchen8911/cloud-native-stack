@@ -70,7 +70,7 @@ Validate Recipe:
 ```shell
 cnsctl validate \
   --recipe recipe.yaml \
-  --snapshot cm://gpu-operator/cns-snapshot
+  --snapshot cm://gpu-operator/cns-snapshot | yq .
 ```
 
 ## Bundle

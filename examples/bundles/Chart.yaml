@@ -1,0 +1,32 @@
+# Cloud Native Stack - Helm Umbrella Chart
+# Generated: 2026-01-23T04:15:56-08:00
+apiVersion: v2
+name: cns-eks-gb200
+description: NVIDIA Cloud Native Stack - GPU-accelerated Kubernetes deployment
+type: application
+version: 0.22.0-next
+appVersion: v0.22.0-next
+
+# Dependencies are deployed in the order listed below.
+# Use `helm dependency update` to download sub-charts.
+dependencies:
+  - name: cert-manager
+    version: v1.17.2
+    repository: https://charts.jetstack.io
+    condition: cert-manager.enabled
+  - name: gpu-operator
+    version: v25.3.3
+    repository: https://helm.ngc.nvidia.com/nvidia
+    condition: gpu-operator.enabled
+  - name: nvidia-dra-driver-gpu
+    version: 25.8.1
+    repository: https://helm.ngc.nvidia.com/nvidia
+    condition: nvidia-dra-driver-gpu.enabled
+  - name: nvsentinel
+    version: v0.6.0
+    repository: oci://ghcr.io/nvidia
+    condition: nvsentinel.enabled
+  - name: skyhook-operator
+    version: 0.11.1
+    repository: https://helm.ngc.nvidia.com/nvidia/skyhook
+    condition: skyhook-operator.enabled
