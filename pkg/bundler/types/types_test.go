@@ -133,6 +133,7 @@ func TestSupportedTypes(t *testing.T) {
 		BundleTypeSkyhook,
 		BundleTypeNVSentinel,
 		BundleTypeCertManager,
+		BundleTypeDraDriver,
 	}
 
 	if len(types) != len(expectedTypes) {
@@ -189,6 +190,7 @@ func TestSupportedBundleTypesAsStrings(t *testing.T) {
 		"skyhook",
 		"nvsentinel",
 		"cert-manager",
+		"dra-driver",
 	}
 
 	if len(strings) != len(expectedStrings) {
@@ -436,6 +438,10 @@ func TestParseType_CaseInsensitive(t *testing.T) {
 		{"NvSentinel", BundleTypeNVSentinel},
 		{"CERT-MANAGER", BundleTypeCertManager},
 		{"Cert-Manager", BundleTypeCertManager},
+		{"DRA-DRIVER", BundleTypeDraDriver},
+		{"Dra-Driver", BundleTypeDraDriver},
+		{"dra-driver", BundleTypeDraDriver},
+		{"DRA-driver", BundleTypeDraDriver},
 	}
 
 	for _, tt := range tests {
