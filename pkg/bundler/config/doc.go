@@ -6,7 +6,6 @@
 //
 // # Configuration Options
 //
-// Config controls bundler behavior through various settings:
 //   - Deployer: Deployment method (DeployerHelm or DeployerArgoCD)
 //   - IncludeReadme: Generate deployment documentation
 //   - IncludeChecksums: Generate SHA256 checksums.txt file
@@ -16,7 +15,7 @@
 //
 // # Deployer Types
 //
-// The DeployerType constants define the supported deployment methods:
+// DeployerType constants define supported deployment methods:
 //   - DeployerHelm: Generates Helm umbrella charts (default)
 //   - DeployerArgoCD: Generates ArgoCD App of Apps manifests
 //
@@ -24,67 +23,17 @@
 //
 // # Usage
 //
-// Create with defaults:
-//
-//	cfg := config.NewConfig()
-//
-// Customize with functional options:
-//
 //	cfg := config.NewConfig(
 //	    config.WithDeployer(config.DeployerHelm),
 //	    config.WithIncludeChecksums(true),
-//	    config.WithVersion("v1.0.0"),
 //	)
 //
-// Access configuration:
+// # Defaults
 //
-//	if cfg.IncludeReadme() {
-//	    // Generate README
-//	}
-//	version := cfg.Version()
-//
-// # Default Values
-//
-// The default configuration includes:
-//   - Deployer: "helm"
+//   - Deployer: DeployerHelm
 //   - IncludeReadme: true
 //   - IncludeChecksums: true
 //   - Version: "dev"
 //
-// # Thread Safety
-//
-// Config is immutable after creation, making it safe for concurrent use by
-// multiple bundlers executing in parallel.
-//
-// # Integration with Bundlers
-//
-// Bundlers receive Config through their constructor:
-//
-//	type MyBundler struct {
-//	    cfg *config.Config
-//	}
-//
-//	func NewMyBundler(cfg *config.Config) *MyBundler {
-//	    return &MyBundler{cfg: cfg}
-//	}
-//
-//	func (b *MyBundler) Make(ctx context.Context, r *recipe.Recipe, outputDir string) (*result.Result, error) {
-//	    if b.cfg.IncludeReadme() {
-//	        // Generate README
-//	    }
-//	    // ...
-//	}
-//
-// Or use BaseBundler which embeds Config:
-//
-//	type MyBundler struct {
-//	    *internal.BaseBundler
-//	}
-//
-//	func (b *MyBundler) Make(ctx context.Context, r *recipe.Recipe, outputDir string) (*result.Result, error) {
-//	    if b.Config.IncludeChecksums() {
-//	        // Generate checksums
-//	    }
-//	    // ...
-//	}
+// Config is immutable after creation, safe for concurrent use.
 package config

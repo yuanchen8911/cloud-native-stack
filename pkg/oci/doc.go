@@ -23,7 +23,6 @@
 //
 // Package and push in two steps:
 //
-//	// First, package locally
 //	pkgResult, err := oci.Package(ctx, oci.PackageOptions{
 //	    SourceDir:  "/path/to/bundle",
 //	    OutputDir:  "/path/to/output",
@@ -35,19 +34,22 @@
 //	    return err
 //	}
 //
-//	// Then push to registry
 //	pushResult, err := oci.PushFromStore(ctx, pkgResult.StorePath, oci.PushOptions{
 //	    Registry:   "ghcr.io",
 //	    Repository: "nvidia/bundle",
 //	    Tag:        "v1.0.0",
 //	})
 //
-// # Configuration
+// # PackageOptions
 //
-// PackageOptions supports configuration for reproducible builds:
-//   - ReproducibleTimestamp: Set a fixed timestamp for reproducible builds
+//   - SourceDir: Directory containing artifacts to package
+//   - OutputDir: Where the OCI Image Layout will be created
+//   - Registry, Repository, Tag: Image reference components
+//   - SubDir: Optionally limit packaging to a subdirectory
+//   - ReproducibleTimestamp: Fixed timestamp for reproducible builds
 //
-// PushOptions supports several configuration options:
+// # PushOptions
+//
 //   - PlainHTTP: Use HTTP instead of HTTPS (for local development registries)
 //   - InsecureTLS: Skip TLS certificate verification
 //
