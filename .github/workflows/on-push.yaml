@@ -36,6 +36,7 @@ jobs:
           go_version: '${{ env.GO_VERSION }}'
           golangci_lint_version: '${{ env.GOLANGCI_LINT_VERSION }}'
           upload_codecov: 'true'
+          codecov_token: ${{ secrets.CODECOV_TOKEN }}
 
       # Scan for Vulnerabilities
       - name: Security Scan

@@ -12,6 +12,10 @@ inputs:
     description: 'Whether to upload coverage to Codecov (true/false)'
     required: false
     default: 'false'
+  codecov_token:
+    description: 'Codecov token for forks (optional, uses OIDC for NVIDIA/cloud-native-stack)'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -42,7 +46,8 @@ runs:
         flags: unit
         fail_ci_if_error: false
         verbose: true
-        use_oidc: true
+        use_oidc: ${{ inputs.codecov_token == '' }}
+        token: ${{ inputs.codecov_token }}
 
     # Lint Code
     - name: Config Go Lint
