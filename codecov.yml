@@ -1,0 +1,49 @@
+# Codecov configuration
+# https://docs.codecov.com/docs/codecov-yaml
+
+coverage:
+  # Coverage precision (number of decimal places)
+  precision: 2
+  round: down
+  range: "60...90"
+
+  status:
+    # Overall project coverage
+    project:
+      default:
+        target: auto      # Use coverage from base commit as target
+        threshold: 1%     # Allow 1% drop before failing
+        if_ci_failed: error
+
+    # Coverage on changed files only (patch coverage)
+    patch:
+      default:
+        target: 70%       # New code should have 70% coverage
+        threshold: 5%     # Allow 5% flexibility
+        if_ci_failed: error
+
+# PR comment settings
+comment:
+  layout: "header, diff, flags, components, files"
+  behavior: default       # Post new comment on each push
+  require_changes: true   # Only comment if coverage changed
+  require_base: true      # Require base report for comparison
+  require_head: true
+
+# Ignore paths from coverage
+ignore:
+  - "**/*_test.go"
+  - "**/mock_*.go"
+  - "**/mocks/**"
+  - "~archive/**"
+  - "examples/**"
+  - "docs/**"
+  - "tools/**"
+
+# Flag management (optional - group coverage by component)
+flags:
+  unit:
+    paths:
+      - pkg/
+      - cmd/
+    carryforward: true

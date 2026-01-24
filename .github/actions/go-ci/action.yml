@@ -39,9 +39,10 @@ runs:
       uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de  # v5.5.2
       with:
         files: ./coverage.out
+        flags: unit
+        fail_ci_if_error: false
         verbose: true
         use_oidc: true
-      continue-on-error: true
 
     # Lint Code
     - name: Config Go Lint
