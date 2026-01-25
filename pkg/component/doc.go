@@ -3,10 +3,10 @@
 // This package contains concrete implementations of components (GPU Operator, Network Operator, etc.)
 // that generate deployment artifacts from recipes. Each component is responsible for:
 //
-//   - Extracting configuration from recipes
-//   - Generating Helm values files
-//   - Creating Kubernetes manifests
-//   - Producing installation/uninstallation scripts
+//   - Extracting configuration from recipes via component references
+//   - Generating Helm values files with proper YAML headers
+//   - Creating Kubernetes manifests (when needed)
+//   - Producing README documentation
 //   - Computing checksums for verification
 //
 // Components self-register with the bundler registry via init() functions, enabling automatic
@@ -14,14 +14,22 @@
 //
 // # Architecture
 //
-// The component package is structured as:
+// The component package uses a generic bundler framework based on [internal.ComponentConfig]
+// and [internal.MakeBundle]. This eliminates boilerplate by:
 //
-//   - internal/: Base component implementation (BaseBundler) and shared utilities
-//   - certmanager/: Cert-Manager component for certificate management
-//   - gpuoperator/: GPU Operator component for GPU workload management
+//   - Centralizing common bundling logic in the internal package
+//   - Using declarative configuration (ComponentConfig) instead of imperative code
+//   - Providing default implementations with customization hooks
+//
+// Package structure:
+//
+//   - internal/: Generic bundler framework (ComponentConfig, MakeBundle, BaseBundler)
+//   - certmanager/: Cert-Manager component with custom InstallCRDs metadata
+//   - dradriver/: DRA Driver component for Dynamic Resource Allocation
+//   - gpuoperator/: GPU Operator component with custom manifest generation
 //   - networkoperator/: Network Operator component for RDMA and SR-IOV
-//   - nvsentinel/: NVIDIA Sentinel component for monitoring
-//   - skyhook/: Skyhook Operator component for node optimization (skyhook-operator)
+//   - nvsentinel/: NVIDIA Sentinel component with custom metadata
+//   - skyhook/: Skyhook Operator component with custom metadata
 //
 // # Usage
 //
@@ -39,10 +47,15 @@
 // To add a new component:
 //
 //  1. Create a new package under pkg/component/<name>
-//  2. Implement the Bundler interface from pkg/bundler/types
-//  3. Embed BaseBundler from pkg/component/internal for common functionality
-//  4. Self-register in init() using bundler.MustRegister()
-//  5. Add templates using go:embed directive
+//  2. Define a [internal.ComponentConfig] with component-specific settings
+//  3. Create a Bundler struct that embeds [internal.BaseBundler]
+//  4. Implement Make() by calling [internal.MakeBundle] with your config
+//  5. Self-register in init() using [registry.MustRegister]
+//  6. Add templates using go:embed directive
 //
-// See pkg/component/gpuoperator for a complete reference implementation.
+// For components with custom metadata fields, provide a MetadataFunc in the config.
+// For components needing custom manifests, provide a CustomManifestFunc.
+//
+// See pkg/component/networkoperator for a minimal example, or
+// pkg/component/gpuoperator for an example with custom manifest generation.
 package component

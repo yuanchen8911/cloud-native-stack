@@ -16,6 +16,17 @@
 //   - README.md: Deployment documentation with prerequisites and instructions
 //   - checksums.txt: SHA256 checksums for verification
 //
+// # Implementation
+//
+// This bundler uses the generic bundler framework from [internal.ComponentConfig]
+// and [internal.MakeBundle]. The componentConfig variable defines:
+//   - Default Helm repository (https://helm.ngc.nvidia.com/nvidia)
+//   - Default Helm chart (nvidia/network-operator)
+//   - Value override key mapping (networkoperator)
+//
+// This is a minimal bundler implementation with no custom metadata or manifest
+// generation, demonstrating the simplest use of the generic framework.
+//
 // # Usage
 //
 // The bundler is registered in the global bundler registry and can be invoked
@@ -24,11 +35,14 @@
 //	bundler := networkoperator.NewBundler(config)
 //	result, err := bundler.Make(ctx, recipe, outputDir)
 //
+// Or through the bundler framework:
+//
+//	cnsctl bundle --recipe recipe.yaml --bundlers network-operator --output ./bundles
+//
 // # Configuration Extraction
 //
-// The bundler extracts configuration from recipe measurements:
-//   - K8s image subtype: Network Operator version, OFED version
-//   - K8s config subtype: RDMA, SR-IOV, IPAM, Multus settings
+// The bundler extracts values from recipe component references. Configuration
+// includes RDMA, SR-IOV, IPAM, and Multus settings.
 //
 // # Templates
 //

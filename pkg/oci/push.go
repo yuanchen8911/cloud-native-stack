@@ -216,7 +216,8 @@ func Package(ctx context.Context, opts PackageOptions) (*PackageResult, error) {
 	for k, v := range opts.Annotations {
 		packOpts.ManifestAnnotations[k] = v
 	}
-	// Use provided timestamp, or skip by default to ensure reproducible builds
+
+	// Add consistent creation timestamp to ensure reproducible builds
 	if opts.ReproducibleTimestamp != "" {
 		packOpts.ManifestAnnotations[ociv1.AnnotationCreated] = opts.ReproducibleTimestamp
 	}

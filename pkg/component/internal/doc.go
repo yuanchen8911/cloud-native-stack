@@ -1,144 +1,133 @@
-// Package internal provides shared utilities and helpers for bundler implementations.
+// Package internal provides the generic bundler framework and shared utilities for component implementations.
 //
 // This package is internal to the bundler framework and should not be imported
 // by external packages. It contains reusable components that reduce boilerplate
 // and ensure consistency across bundler implementations.
 //
-// # Core Components
+// # Generic Bundler Framework
 //
-// BaseBundler: Helper that reduces boilerplate in bundler implementations by providing:
-//   - File and directory management with proper error handling
-//   - Template rendering with embedded template support
-//   - Checksum generation with SHA256
-//   - Context cancellation checking
-//   - Result tracking with automatic metadata
-//   - Prometheus metrics recording
+// The framework provides a declarative approach to bundle generation using:
 //
-// ContextChecker: Periodic context cancellation checking for long-running operations
+// ComponentConfig: Defines all component-specific settings in one struct:
+//   - Name and DisplayName for identification
+//   - ValueOverrideKeys for CLI --set flag mapping
+//   - Node selector and toleration paths for workload placement
+//   - DefaultHelmRepository and DefaultHelmChart for Helm deployment
+//   - TemplateGetter function for embedded templates
+//   - Optional CustomManifestFunc for generating additional manifests
+//   - Optional MetadataFunc for custom README template data
 //
-// TestHarness: Shared test utilities for bundler testing with:
-//   - Automatic recipe generation
-//   - Temporary directory management
-//   - Common assertions (files, checksums, metadata)
-//   - Test isolation with cleanup
+// MakeBundle: Generic function that handles all common bundling steps:
+//   - Extracting component values from recipe input
+//   - Applying user value overrides from CLI flags
+//   - Applying node selectors and tolerations to Helm paths
+//   - Creating directory structure
+//   - Writing values.yaml with proper YAML headers
+//   - Calling optional CustomManifestFunc for additional files
+//   - Generating README from templates
+//   - Computing checksums
 //
-// # BaseBundler Usage
+// # Minimal Bundler Example
 //
-// Bundler implementations should embed BaseBundler to access helper methods:
+// Most bundlers can be implemented in ~50 lines using the framework:
 //
-//	type MyBundler struct {
+//	var componentConfig = internal.ComponentConfig{
+//	    Name:                  "my-operator",
+//	    DisplayName:           "My Operator",
+//	    ValueOverrideKeys:     []string{"myoperator"},
+//	    DefaultHelmRepository: "https://charts.example.com",
+//	    DefaultHelmChart:      "example/my-operator",
+//	    TemplateGetter:        GetTemplate,
+//	}
+//
+//	type Bundler struct {
 //	    *internal.BaseBundler
 //	}
 //
-//	func NewMyBundler(cfg *config.Config) *MyBundler {
-//	    return &MyBundler{
+//	func NewBundler(cfg *config.Config) *Bundler {
+//	    return &Bundler{
 //	        BaseBundler: internal.NewBaseBundler(cfg, types.BundleTypeMyOperator),
 //	    }
 //	}
 //
-// Then use helper methods in Make():
+//	func (b *Bundler) Make(ctx context.Context, input recipe.RecipeInput, dir string) (*result.Result, error) {
+//	    return internal.MakeBundle(ctx, b.BaseBundler, input, dir, componentConfig)
+//	}
 //
-//	func (b *MyBundler) Make(ctx context.Context, r *recipe.Recipe, outputDir string) (*result.Result, error) {
-//	    // Create directory structure
-//	    dirs, err := b.CreateBundleDir(outputDir, "my-operator")
-//	    if err != nil {
-//	        return nil, err
-//	    }
+// # Custom Metadata
 //
-//	    // Render template
-//	    content, err := b.RenderTemplate(myTemplate, "values.yaml", data)
-//	    if err != nil {
-//	        return nil, err
-//	    }
+// Components that need additional template data beyond the default BundleMetadata
+// can provide a MetadataFunc:
 //
-//	    // Write file
-//	    path := filepath.Join(dirs.Root, "values.yaml")
-//	    if err := b.WriteFileString(path, content, 0644); err != nil {
-//	        return nil, err
-//	    }
-//
-//	    // Generate checksums (if enabled)
-//	    if b.Config.IncludeChecksums() {
-//	        if err := b.GenerateChecksums(ctx, dirs.Root); err != nil {
-//	            return nil, err
+//	var componentConfig = internal.ComponentConfig{
+//	    // ... other fields ...
+//	    MetadataFunc: func(configMap map[string]string) interface{} {
+//	        return &CustomMetadata{
+//	            Namespace:   internal.GetConfigValue(configMap, "namespace", "default"),
+//	            CustomField: "custom-value",
 //	        }
-//	    }
-//
-//	    return b.Result, nil
+//	    },
 //	}
 //
-// # Template Helpers
+// # Custom Manifest Generation
 //
-// RenderTemplate: Renders Go templates with automatic error handling
+// Components that need to generate additional manifests can provide a CustomManifestFunc:
 //
-//	content, err := b.RenderTemplate(templateFS, "values.yaml", data)
-//
-// Supports go:embed templates:
-//
-//	//go:embed templates/*.tmpl
-//	var templates embed.FS
-//
-// # File Helpers
-//
-// WriteFile and WriteFileString: Atomic file writes with directory creation:
-//
-//	err := b.WriteFile(path, []byte("content"), 0644)
-//	err := b.WriteFileString(path, "content", 0644)
-//
-// Both methods automatically:
-//   - Create parent directories
-//   - Track files in result.Files
-//   - Handle errors consistently
-//
-// # Checksum Generation
-//
-// GenerateChecksums: Creates checksums.txt with SHA256 hashes:
-//
-//	err := b.GenerateChecksums(ctx, bundleDir)
-//
-// Automatically includes all files in result.Files and respects context cancellation.
-//
-// # Context Checking
-//
-// CheckContext: Periodically check for context cancellation in loops:
-//
-//	for _, item := range items {
-//	    if err := b.CheckContext(ctx); err != nil {
-//	        return err
-//	    }
-//	    // Process item
+//	var componentConfig = internal.ComponentConfig{
+//	    // ... other fields ...
+//	    CustomManifestFunc: func(ctx context.Context, b *internal.BaseBundler,
+//	        values map[string]interface{}, configMap map[string]string, dir string) ([]string, error) {
+//	        // Generate manifests using b.WriteFile() or b.GenerateFileFromTemplate()
+//	        return []string{"manifests/custom.yaml"}, nil
+//	    },
 //	}
 //
-// # Test Harness
+// # BaseBundler Helper Methods
+//
+// BaseBundler provides common functionality for file operations:
+//
+//   - CreateBundleDir: Creates directory structure with proper permissions
+//   - WriteFile: Writes content with automatic directory creation
+//   - WriteFileString: Convenience wrapper for string content
+//   - RenderTemplate: Renders Go templates with error handling
+//   - GenerateFileFromTemplate: One-step template rendering and file writing
+//   - GenerateChecksums: Creates checksums.txt with SHA256 hashes
+//   - CheckContext: Periodic context cancellation checking
+//   - Finalize: Records timing and result metadata
+//   - BuildConfigMapFromInput: Creates baseline config map from recipe input
+//
+// # Helper Functions
+//
+// Utility functions for common operations:
+//
+//   - GetConfigValue: Safely extracts config map values with defaults
+//   - GetBundlerVersion: Returns bundler version from config
+//   - GetRecipeBundlerVersion: Returns recipe version from config
+//   - MarshalYAMLWithHeader: Serializes values with component header
+//   - ApplyMapOverrides: Applies dot-notation overrides to nested maps
+//   - ApplyNodeSelectorOverrides: Applies node selectors to Helm paths
+//   - ApplyTolerationsOverrides: Applies tolerations to Helm paths
+//   - GenerateDefaultBundleMetadata: Creates default BundleMetadata struct
+//
+// # Default BundleMetadata
+//
+// Components using the default metadata get:
+//
+//   - Namespace, HelmRepository, HelmChart, HelmChartVersion
+//   - Version (bundler version), RecipeVersion
+//
+// Access in templates via {{ .Script.Namespace }}, {{ .Script.Version }}, etc.
+//
+// # TestHarness
 //
 // TestHarness simplifies bundler testing by providing common setup and assertions:
 //
 //	func TestMyBundler_Make(t *testing.T) {
 //	    h := internal.NewTestHarness(t, "my-bundler")
 //	    bundler := NewMyBundler(h.Config())
-//
 //	    h.TestMake(bundler)
 //	}
 //
-// The harness automatically:
-//   - Creates temporary directories
-//   - Generates test recipes
-//   - Validates output files
-//   - Checks checksums
-//   - Verifies metadata
-//   - Cleans up resources
-//
-// # Helper Functions
-//
-// BuildBaseConfigMap: Creates baseline config map from recipe measurements
-//
-//	configMap, err := internal.BuildBaseConfigMap(recipe)
-//
-// GenerateFileFromTemplate: One-step template rendering and file writing
-//
-//	err := internal.GenerateFileFromTemplate(templateFS, "config.yaml", outputPath, data, 0644)
-//
-// ExtractK8sImageSubtype: Safely extracts K8s image subtype from recipe
-//
-//	subtype, err := internal.ExtractK8sImageSubtype(recipe)
+// The harness automatically creates temporary directories, generates test recipes,
+// validates output files, and cleans up resources.
 package internal

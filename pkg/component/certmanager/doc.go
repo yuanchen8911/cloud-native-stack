@@ -15,6 +15,22 @@
 //   - README.md: Deployment documentation with prerequisites and instructions
 //   - checksums.txt: SHA256 checksums for verification
 //
+// # Implementation
+//
+// This bundler uses the generic bundler framework from [internal.ComponentConfig]
+// and [internal.MakeBundle]. The componentConfig variable defines:
+//   - Node selector paths for controller, webhook, cainjector, and startupapicheck
+//   - Default Helm repository (https://charts.jetstack.io)
+//   - Default Helm chart (jetstack/cert-manager)
+//   - Custom MetadataFunc for InstallCRDs field
+//
+// # Custom Metadata
+//
+// This bundler provides custom metadata via MetadataFunc to include:
+//   - InstallCRDs: Boolean flag for CRD installation (always true)
+//
+// This additional field is used in README templates for installation instructions.
+//
 // # Usage
 //
 // The bundler is registered in the global bundler registry and can be invoked
@@ -29,9 +45,8 @@
 //
 // # Configuration Extraction
 //
-// The bundler extracts configuration from recipe measurements:
-//   - K8s image subtype: cert-manager version
-//   - K8s config subtype: CRD installation, DNS settings, webhooks
+// The bundler extracts values from recipe component references including
+// CRD installation settings, DNS configuration, and webhook settings.
 //
 // # Templates
 //
@@ -49,17 +64,4 @@
 //   - Helm 3.x installed
 //   - kubectl configured
 //   - Appropriate RBAC permissions
-//
-// For ACME/Let's Encrypt:
-//   - External DNS provider access (Route53, CloudFlare, etc.)
-//   - Valid domain name for DNS-01 challenge
-//
-// # Security Considerations
-//
-// cert-manager requires cluster-wide permissions for certificate management:
-//   - ClusterRole for CRD access
-//   - Webhooks for validation and mutation
-//   - Secrets for certificate storage
-//
-// Enable RBAC and network policies to restrict access appropriately.
 package certmanager

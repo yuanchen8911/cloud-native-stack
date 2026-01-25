@@ -86,12 +86,6 @@ cnsctl bundle \
   --accelerated-node-toleration nvidia.com/gpu=present:NoSchedule
 ```
 
-Check bundle content: 
-
-```shell
-tree ./bundle
-```
-
 Bundle from Recipe using API: 
 
 ```shell
@@ -106,16 +100,28 @@ Same content:
 unzip -l bundle.zip
 ```
 
+Navigate into the bundle:
+
+```shell
+cd ./bundle
+```
+
+Check bundle content: 
+
+```shell
+tree .
+```
+
+Check the integrity of its content
+
+```shell
+shasum -a 256 -c checksums.txt
+```
+
 View bundle README: 
 
 ```shell
 grip --browser --quiet ./bundle/README.md
-```
-
-Review Bundle and validate chart dependencies:
-
-```shell
-cd ./bundle
 ```
 
 Prep the deployment: 

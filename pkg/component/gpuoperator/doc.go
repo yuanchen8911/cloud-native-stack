@@ -17,6 +17,14 @@
 //   - README.md: Deployment documentation with prerequisites and instructions
 //   - checksums.txt: SHA256 checksums for verification
 //
+// # Implementation
+//
+// This bundler uses the generic bundler framework from [internal.ComponentConfig]
+// and [internal.MakeBundle]. The componentConfig variable defines:
+//   - Node selector and toleration paths for operator and daemonset workloads
+//   - Default Helm repository (https://helm.ngc.nvidia.com/nvidia)
+//   - CustomManifestFunc for generating DCGM exporter and kernel module manifests
+//
 // # Usage
 //
 // The bundler is registered in the global bundler registry and can be invoked
@@ -31,13 +39,15 @@
 //
 // # Configuration Extraction
 //
-// The bundler extracts configuration from recipe measurements:
-//   - K8s image subtype: GPU Operator version, driver version, toolkit version
-//   - K8s config subtype: MIG mode, secure boot, CDI, vGPU, GDS settings
-//   - GPU subtypes: Hardware-specific optimizations
-//
-// The recipe's matchedRules field indicates which overlays were applied, enabling
+// The bundler extracts values from recipe component references. The recipe's
+// matchedRules field indicates which overlays were applied, enabling
 // workload-specific optimizations (training vs inference).
+//
+// # Custom Manifests
+//
+// The bundler generates additional manifests via CustomManifestFunc:
+//   - DCGM Exporter ConfigMap (when dcgm-exporter.arguments contains custom args)
+//   - Kernel Module Parameters ConfigMap (for GB200 accelerator tuning)
 //
 // # Templates
 //
@@ -47,17 +57,4 @@
 //   - Version-specific configurations
 //   - Hardware-specific optimizations
 //   - Workload intent tuning (training/inference)
-//
-// # Validation
-//
-// The bundler performs validation to ensure:
-//   - Recipe contains required K8s image measurements
-//   - GPU Operator version is specified
-//   - Configuration is internally consistent
-//   - All required template data is available
-//
-// # Parallel Execution
-//
-// When multiple bundlers are registered, they execute in parallel with proper
-// synchronization. The BaseBundler helper handles concurrent writes safely.
 package gpuoperator

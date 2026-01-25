@@ -14,6 +14,21 @@
 //   - README.md: Deployment documentation with prerequisites
 //   - checksums.txt: SHA256 checksums for verification
 //
+// # Implementation
+//
+// This bundler uses the generic bundler framework from [internal.ComponentConfig]
+// and [internal.MakeBundle]. The componentConfig variable defines:
+//   - Default Helm repository (https://helm.ngc.nvidia.com/nvstaging)
+//   - Default Helm chart (nvstaging/nvsentinel)
+//   - Custom MetadataFunc for NVSentinel-specific fields
+//
+// # Custom Metadata
+//
+// This bundler provides custom metadata via MetadataFunc to include:
+//   - HelmReleaseName: Release name for Helm installation
+//   - NVSentinelVersion: Version of NVSentinel being deployed
+//   - HelmChartRepo: Repository URL for chart installation
+//
 // # Usage
 //
 // The bundler is registered in the global bundler registry and can be invoked
@@ -28,9 +43,8 @@
 //
 // # Configuration Extraction
 //
-// The bundler extracts configuration from recipe measurements:
-//   - K8s image subtype: NVSentinel version
-//   - K8s config subtype: Monitoring settings, alert thresholds
+// The bundler extracts values from recipe component references including
+// monitoring settings and alert thresholds.
 //
 // # Templates
 //

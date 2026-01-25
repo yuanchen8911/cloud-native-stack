@@ -4,25 +4,25 @@ Learn how to create new bundlers for Cloud Native Stack.
 
 ## Overview
 
-Bundlers convert RecipeInput objects (either Recipe or RecipeResult) into deployment artifacts. Artifacts include Helm values files, Kubernetes manifests, and installation scripts.
+Bundlers convert RecipeInput objects into deployment artifacts. Artifacts include Helm values files, Kubernetes manifests, and README documentation.
 
 **Framework features:**
 
+- **Generic bundler framework**: `ComponentConfig` struct + `MakeBundle()` function handles all common logic
 - **Factory registration**: Bundlers register factory functions via `registry.MustRegister()` in `init()`
 - **RecipeInput interface**: Single `Make()` method handles both Recipe and RecipeResult via interface
-- **BaseBundler**: Helper struct from `pkg/component/internal` providing common operations
+- **BaseBundler**: Helper struct from `pkg/component/internal` providing file operations
 - **Config injection**: Bundlers receive `*config.Config` with value overrides, node selectors, etc.
 - **Parallel execution**: Multiple bundlers run concurrently via `goroutines` with `errgroup` context cancellation
 - **Template system**: Bundlers embed templates individually using `go:embed` directive
-- **Value overrides**: CLI `--set` flag allows users to set final customization at runtime via `common.ApplyMapOverrides()`
+- **Value overrides**: CLI `--set` flag allows runtime customization via `ApplyMapOverrides()`
 - **Structured errors**: Uses `pkg/errors` for error codes and wrapping
-- **E2E validation**: `tools/e2e` script tests complete workflow including bundle generation
 
 ## Quick Start
 
 ### Minimal Bundler Implementation
 
-The bundler framework uses a **factory-based registration pattern**. Bundlers register a factory function that receives a `*config.Config` and returns a `Bundler` instance.
+The bundler framework uses a **declarative configuration pattern**. Define a `ComponentConfig` and delegate to `MakeBundle()`:
 
 ```go
 // pkg/component/mybundler/bundler.go
@@ -30,93 +30,54 @@ package mybundler
 
 import (
     "context"
-    "log/slog"
-    "path/filepath"
-    "time"
-    
+
     "github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
     "github.com/NVIDIA/cloud-native-stack/pkg/bundler/result"
     "github.com/NVIDIA/cloud-native-stack/pkg/bundler/types"
-    common "github.com/NVIDIA/cloud-native-stack/pkg/component/internal"
-    "github.com/NVIDIA/cloud-native-stack/pkg/errors"
+    "github.com/NVIDIA/cloud-native-stack/pkg/component/internal"
     "github.com/NVIDIA/cloud-native-stack/pkg/recipe"
 )
 
 const (
-    Name = "my-bundler"  // Use constant for component name
+    Name = "my-bundler"
 )
+
+// componentConfig defines all component-specific settings.
+var componentConfig = internal.ComponentConfig{
+    Name:                  Name,
+    DisplayName:           "My Bundler",
+    ValueOverrideKeys:     []string{"mybundler"},
+    DefaultHelmRepository: "https://charts.example.com",
+    DefaultHelmChart:      "example/my-bundler",
+    TemplateGetter:        GetTemplate,
+}
 
 // Bundler generates deployment bundles from RecipeInput.
 type Bundler struct {
-    *common.BaseBundler  // Embed helper from internal package
+    *internal.BaseBundler
 }
 
 // NewBundler creates a new bundler instance.
-// Receives config from registry during instantiation.
-func NewBundler(conf *config.Config) *Bundler {
+func NewBundler(cfg *config.Config) *Bundler {
     return &Bundler{
-        BaseBundler: common.NewBaseBundler(conf, types.BundleTypeMyBundler),
+        BaseBundler: internal.NewBaseBundler(cfg, types.BundleTypeMyBundler),
     }
 }
 
-// Make generates the bundle based on the provided recipe.
-// Implements registry.Bundler interface.
+// Make generates the bundle by delegating to the generic MakeBundle function.
 func (b *Bundler) Make(ctx context.Context, input recipe.RecipeInput, dir string) (*result.Result, error) {
-    start := time.Now()
-    
-    slog.Debug("generating bundle",
-        "output_dir", dir,
-        "component", Name,
-    )
-    
-    // 1. Get component reference from RecipeInput
-    componentRef := input.GetComponentRef(Name)
-    if componentRef == nil {
-        return nil, errors.New(errors.ErrCodeInvalidRequest,
-            Name+" component not found in recipe")
-    }
-    
-    // 2. Get values from component reference
-    values, err := input.GetValuesForComponent(Name)
-    if err != nil {
-        return nil, errors.Wrap(errors.ErrCodeInternal,
-            "failed to get values for "+Name, err)
-    }
-    
-    // 3. Apply user value overrides from --set flags
-    if overrides := b.getValueOverrides(); len(overrides) > 0 {
-        if applyErr := common.ApplyMapOverrides(values, overrides); applyErr != nil {
-            slog.Warn("failed to apply some value overrides", "error", applyErr)
-        }
-    }
-    
-    // 4. Apply node selectors and tolerations if configured
-    if nodeSelector := b.Config.SystemNodeSelector(); len(nodeSelector) > 0 {
-        common.ApplyNodeSelectorOverrides(values, nodeSelector,
-            "operator.nodeSelector",
-        )
-    }
-    
-    // 5. Create bundle directory structure
-    dirs, err := b.CreateBundleDir(dir, Name)
-    if err != nil {
-        return b.Result, errors.Wrap(errors.ErrCodeInternal,
-            "failed to create bundle directory", err)
-    }
-    
-    // 6. Build config map for metadata
-    configMap := b.BuildConfigMapFromInput(input)
-    configMap["namespace"] = Name
-    configMap["helm_repository"] = componentRef.Source
-    configMap["helm_chart_version"] = componentRef.Version
-    
-    // 7. Serialize values to YAML with header
-    header := common.ValuesHeader{
-        ComponentName:  "My Bundler",
-        Timestamp:      time.Now().Format(time.RFC3339),
-        BundlerVersion: configMap["bundler_version"],
-        RecipeVersion:  configMap["recipe_version"],
-    }
+    return internal.MakeBundle(ctx, b.BaseBundler, input, dir, componentConfig)
+}
+```
+
+That's it! The `MakeBundle()` function handles:
+- Extracting component values from recipe input
+- Applying user value overrides from CLI `--set` flags
+- Applying node selectors and tolerations to configured Helm paths
+- Creating directory structure
+- Writing values.yaml with proper headers
+- Generating README from templates
+- Computing checksums
     valuesYAML, err := common.MarshalYAMLWithHeader(values, header)
     if err != nil {
         return b.Result, errors.Wrap(errors.ErrCodeInternal,
@@ -184,40 +145,66 @@ func init() {
 }
 ```
 
-### Bundle Metadata Generation (scripts.go)
+### Custom Metadata (Optional)
 
-Create a separate file for metadata generation:
+For components that need additional metadata beyond the defaults, provide a `MetadataFunc`:
 
 ```go
-// pkg/component/mybundler/scripts.go
-package mybundler
-
-import (
-    common "github.com/NVIDIA/cloud-native-stack/pkg/component/internal"
-)
-
-// BundleMetadata represents metadata for bundle generation (README, manifests).
-// This struct provides deployment metadata used in README templates and manifest generation.
-// Note: Named "scripts.go" for historical reasons but no longer generates shell scripts.
-type BundleMetadata struct {
-    Namespace        string
-    HelmRepository   string
-    HelmChart        string
-    HelmChartVersion string
-    Version          string
-    RecipeVersion    string
+// componentConfig with custom metadata function
+var componentConfig = internal.ComponentConfig{
+    Name:                  Name,
+    DisplayName:           "Cert Manager",
+    ValueOverrideKeys:     []string{"certmanager"},
+    DefaultHelmRepository: "https://charts.jetstack.io",
+    DefaultHelmChart:      "jetstack/cert-manager",
+    TemplateGetter:        GetTemplate,
+    // Custom metadata adds InstallCRDs field
+    MetadataFunc: func(configMap map[string]string, values map[string]interface{}) interface{} {
+        metadata := internal.GenerateDefaultBundleMetadata(configMap)
+        return &BundleMetadata{
+            BundleMetadata: *metadata,
+            InstallCRDs:    getBoolValue(values, "installCRDs", true),
+        }
+    },
 }
 
-// GenerateBundleMetadata creates bundle metadata from config map.
-func GenerateBundleMetadata(config map[string]string) *BundleMetadata {
-    return &BundleMetadata{
-        Namespace:        common.GetConfigValue(config, "namespace", "my-bundler"),
-        HelmRepository:   common.GetConfigValue(config, "helm_repository", "https://helm.ngc.nvidia.com/nvidia"),
-        HelmChart:        "nvidia/my-bundler",
-        HelmChartVersion: common.GetConfigValue(config, "helm_chart_version", ""),
-        Version:          common.GetBundlerVersion(config),
-        RecipeVersion:    common.GetRecipeBundlerVersion(config),
-    }
+// BundleMetadata extends the default with component-specific fields.
+type BundleMetadata struct {
+    internal.BundleMetadata
+    InstallCRDs bool
+}
+```
+
+### Custom Manifest Generation (Optional)
+
+For components that generate additional Kubernetes manifests, provide a `CustomManifestFunc`:
+
+```go
+// componentConfig with custom manifest generation
+var componentConfig = internal.ComponentConfig{
+    Name:                  Name,
+    DisplayName:           "GPU Operator",
+    ValueOverrideKeys:     []string{"gpuoperator"},
+    DefaultHelmRepository: "https://helm.ngc.nvidia.com/nvidia",
+    DefaultHelmChart:      "nvidia/gpu-operator",
+    TemplateGetter:        GetTemplate,
+    // Custom manifest function generates DCGM exporter and kernel module params
+    CustomManifestFunc: func(ctx context.Context, b *internal.BaseBundler, 
+        input recipe.RecipeInput, dirs *internal.BundleDirs, 
+        configMap map[string]string, values map[string]interface{}) error {
+        
+        manifestsDir := filepath.Join(dirs.Root, "manifests")
+        if err := os.MkdirAll(manifestsDir, 0755); err != nil {
+            return err
+        }
+        
+        // Generate DCGM exporter ConfigMap
+        if err := generateDCGMExporterManifest(ctx, b, manifestsDir, configMap, values); err != nil {
+            return err
+        }
+        
+        return nil
+    },
 }
 ```
 
@@ -264,8 +251,11 @@ Recipe Version: {{ .Script.RecipeVersion }}
 ## Installation
 
 \```bash
-chmod +x install.sh
-./install.sh
+helm repo add myrepo {{ .Script.HelmRepository }}
+helm install my-bundler myrepo/{{ .Script.HelmChart }} \
+  --namespace {{ .Script.Namespace }} \
+  --create-namespace \
+  -f values.yaml
 \```
 
 ## Verification
@@ -275,24 +265,21 @@ kubectl get pods -n {{ .Script.Namespace }}
 \```
 ```
 
-**Note:** Values are written directly to `values.yaml` using `common.MarshalYAMLWithHeader()`, not via templates. Templates are used for README documentation.
+**Note:** Values are written directly to `values.yaml` using `internal.MarshalYAMLWithHeader()`, not via templates. Templates are used for README documentation.
 
 ## Best Practices
 
 ### Implementation
 
+- ✅ Use `ComponentConfig` struct for declarative bundler definition
+- ✅ Delegate to `internal.MakeBundle()` for all common logic
 - ✅ Use `Name` constant instead of hardcoded component names
-- ✅ Implement `registry.Bundler` interface with correct signature
-- ✅ Get values via `input.GetValuesForComponent(Name)` (returns error)
-- ✅ Use `common.MarshalYAMLWithHeader()` for values.yaml (not templates)
-- ✅ Use `BundleMetadata` for metadata (namespace, version, helm info)
-- ✅ Combine values + BundleMetadata for README templates
+- ✅ Use `ValueOverrideKeys` to specify which CLI `--set` prefixes apply
+- ✅ Use `*NodeSelectorPaths` and `*TolerationPaths` for node scheduling
+- ✅ Only add `MetadataFunc` if you need custom metadata fields
+- ✅ Only add `CustomManifestFunc` if you need additional K8s manifests
 - ✅ Use `go:embed` for template portability
 - ✅ Use structured errors from `pkg/errors`
-- ✅ Apply value overrides via `common.ApplyMapOverrides()`
-- ✅ Apply node selectors via `common.ApplyNodeSelectorOverrides()`
-- ✅ Call `b.Finalize(start)` at the end of successful generation
-- ✅ Check context cancellation for long operations
 
 ### Testing
 
@@ -307,8 +294,7 @@ kubectl get pods -n {{ .Script.Namespace }}
 ### Templates
 
 - ✅ Use `GetTemplate(name)` function pattern (returns `(string, bool)`)
-- ✅ For README, pass combined map: `{"Values": values, "Script": metadata}`
-- ✅ The "Script" key is preserved for template compatibility
+- ✅ For README, templates receive `{"Values": values, "Script": metadata}`
 - ✅ Access BundleMetadata fields directly: `{{ .Script.Namespace }}`, `{{ .Script.Version }}`
 - ✅ Access values in README: `{{ index .Values "key" }}`
 - ✅ Handle missing values gracefully with `{{- if }}`
@@ -323,112 +309,68 @@ kubectl get pods -n {{ .Script.Namespace }}
 
 ## Common Patterns
 
-### Getting Component Values
+### Using ComponentConfig
+
+The `ComponentConfig` struct defines all component-specific settings declaratively:
 
 ```go
-// Always use Name constant
-componentRef := input.GetComponentRef(Name)
-if componentRef == nil {
-    return nil, errors.New(errors.ErrCodeInvalidRequest,
-        Name+" component not found in recipe")
-}
-
-// Get values - note: returns (map, error)
-values, err := input.GetValuesForComponent(Name)
-if err != nil {
-    return nil, errors.Wrap(errors.ErrCodeInternal,
-        "failed to get values for "+Name, err)
-}
-
-// Apply overrides from --set flags
-if overrides := b.getValueOverrides(); len(overrides) > 0 {
-    if applyErr := common.ApplyMapOverrides(values, overrides); applyErr != nil {
-        slog.Warn("failed to apply some value overrides", "error", applyErr)
-    }
-}
-```
-
-### Writing Values.yaml
-
-Values are written directly to YAML with a header comment (not via templates):
-
-```go
-header := common.ValuesHeader{
-    ComponentName:  "GPU Operator",
-    Timestamp:      time.Now().Format(time.RFC3339),
-    BundlerVersion: configMap["bundler_version"],
-    RecipeVersion:  configMap["recipe_version"],
-}
-valuesYAML, err := common.MarshalYAMLWithHeader(values, header)
-if err != nil {
-    return b.Result, errors.Wrap(errors.ErrCodeInternal,
-        "failed to serialize values to YAML", err)
-}
-
-valuesPath := filepath.Join(dirs.Root, "values.yaml")
-if err := b.WriteFile(valuesPath, valuesYAML, 0644); err != nil {
-    return b.Result, errors.Wrap(errors.ErrCodeInternal,
-        "failed to write values file", err)
-}
-```
-
-### Accessing Values in Templates
-
-```markdown
-# README.md receives combined map: {"Values": ..., "Script": ...}
-# Note: "Script" key preserved for template compatibility
-Version: {{ .Script.Version }}
-Recipe: {{ .Script.RecipeVersion }}
-Namespace: {{ .Script.Namespace }}
-```
-
-### Error Handling
-
-```go
-// Use structured errors from pkg/errors
-if componentRef == nil {
-    return nil, errors.New(errors.ErrCodeInvalidRequest,
-        Name+" component not found in recipe")
-}
-
-// Wrap errors with context
-if err != nil {
-    return b.Result, errors.Wrap(errors.ErrCodeInternal,
-        "failed to create bundle directory", err)
-}
-
-// Return b.Result on errors to preserve partial results
-if err := b.WriteFile(path, content, 0644); err != nil {
-    return b.Result, errors.Wrap(errors.ErrCodeInternal,
-        "failed to write file", err)
+var componentConfig = internal.ComponentConfig{
+    // Required fields
+    Name:                  "my-component",           // Component name (matches recipe)
+    DisplayName:           "My Component",           // Human-readable name for headers
+    ValueOverrideKeys:     []string{"mycomponent"},  // CLI --set prefix keys
+    DefaultHelmRepository: "https://charts.example.com",
+    DefaultHelmChart:      "example/my-component",
+    TemplateGetter:        GetTemplate,              // Template access function
+    
+    // Optional: Node scheduling paths (for system/accelerated node flags)
+    SystemNodeSelectorPaths:      []string{"operator.nodeSelector"},
+    SystemTolerationPaths:        []string{"operator.tolerations"},
+    AcceleratedNodeSelectorPaths: []string{"daemonsets.nodeSelector"},
+    AcceleratedTolerationPaths:   []string{"daemonsets.tolerations"},
+    
+    // Optional: Custom extensions
+    MetadataFunc:       nil,  // Custom metadata for README templates
+    CustomManifestFunc: nil,  // Additional K8s manifest generation
 }
 ```
 
 ### Node Selector and Toleration Handling
 
-The bundle command supports `--system-node-selector`, `--system-node-toleration`, `--accelerated-node-selector`, and `--accelerated-node-toleration` flags. Bundlers receive these as pre-applied overrides in the values map.
+The bundle command supports `--system-node-selector`, `--system-node-toleration`, `--accelerated-node-selector`, and `--accelerated-node-toleration` flags.
 
-**How it works**:
-1. CLI parses node selector/toleration flags
-2. Values are applied to bundler-specific paths via `ApplyNodeSelectorOverrides()`
-3. Bundler receives values map with selectors/tolerations already set
-4. Templates render the values normally
+**How it works with ComponentConfig**:
+1. Define paths in `ComponentConfig.*NodeSelectorPaths` and `*TolerationPaths`
+2. `MakeBundle()` automatically applies CLI values to those paths
+3. Templates render the values normally
 
-**Bundler-specific paths** (defined in each bundler):
+**Bundler-specific paths** (defined in ComponentConfig):
 
-**GPU Operator** (`pkg/component/gpuoperator/bundler.go`):
-- System node selector: `operator.nodeSelector`
-- System toleration: `operator.tolerations`
-- Accelerated node selector: `daemonsets.nodeSelector`
-- Accelerated toleration: `daemonsets.tolerations`
+**GPU Operator**:
+- `SystemNodeSelectorPaths`: `["operator.nodeSelector"]`
+- `SystemTolerationPaths`: `["operator.tolerations"]`
+- `AcceleratedNodeSelectorPaths`: `["daemonsets.nodeSelector"]`
+- `AcceleratedTolerationPaths`: `["daemonsets.tolerations"]`
 
-**Network Operator** (`pkg/component/networkoperator/bundler.go`):
-- System node selector: `operator.nodeSelector`
-- Accelerated node selector: `daemonsets.nodeSelector`
+**Network Operator**:
+- `SystemNodeSelectorPaths`: `["operator.nodeSelector"]`
+- `AcceleratedNodeSelectorPaths`: `["daemonsets.nodeSelector"]`
 
-**Cert-Manager** (`pkg/component/certmanager/bundler.go`):
-- System node selector: `controller.nodeSelector`
-- System toleration: `controller.tolerations`
+**Cert-Manager**:
+- `SystemNodeSelectorPaths`: `["controller.nodeSelector"]`
+- `SystemTolerationPaths`: `["controller.tolerations"]`
+
+### Error Handling
+
+Errors are handled automatically by `MakeBundle()`. For custom functions, use structured errors:
+
+```go
+// In CustomManifestFunc or MetadataFunc
+if err != nil {
+    return errors.Wrap(errors.ErrCodeInternal,
+        "failed to generate manifest", err)
+}
+```
 
 ## Deployer Integration
 

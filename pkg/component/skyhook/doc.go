@@ -16,6 +16,21 @@
 //   - README.md: Deployment documentation with prerequisites
 //   - checksums.txt: SHA256 checksums for verification
 //
+// # Implementation
+//
+// This bundler uses the generic bundler framework from [internal.ComponentConfig]
+// and [internal.MakeBundle]. The componentConfig variable defines:
+//   - Default Helm repository (https://helm.ngc.nvidia.com/nvstaging)
+//   - Default Helm chart (nvstaging/skyhook-operator)
+//   - Custom MetadataFunc for Skyhook-specific fields
+//
+// # Custom Metadata
+//
+// This bundler provides custom metadata via MetadataFunc to include:
+//   - HelmChartName: Display name for the chart
+//   - HelmReleaseName: Release name for Helm installation
+//   - OperatorRegistry: Container registry for operator images
+//
 // # Usage
 //
 // The bundler is registered in the global bundler registry and can be invoked
@@ -30,19 +45,8 @@
 //
 // # Configuration Extraction
 //
-// The bundler extracts configuration from recipe measurements:
-//   - K8s image subtype: Skyhook version
-//   - K8s config subtype: Optimization settings (NUMA, huge pages, etc.)
-//   - OS subtype: Current kernel parameters for comparison
-//   - GPU subtype: GPU-specific optimization requirements
-//
-// # Skyhook CR
-//
-// The generated Skyhook custom resource defines:
-//   - Target node selectors
-//   - Kernel parameter settings
-//   - Service configuration overrides
-//   - Validation and rollback policies
+// The bundler extracts values from recipe component references including
+// optimization settings for NUMA, huge pages, and GPU-specific parameters.
 //
 // # Templates
 //

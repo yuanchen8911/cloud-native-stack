@@ -691,28 +691,26 @@ securityContext:
 
 ### Overview
 
-The Bundler Framework provides an extensible system for generating deployment bundles from configuration recipes. It uses a **BaseBundler helper** that reduces implementation complexity by ~75% (from ~400 lines to ~100 lines), combined with a registry pattern for automatic bundler discovery.
+The Bundler Framework provides an extensible system for generating deployment bundles from configuration recipes. It uses a **generic bundler framework** with `ComponentConfig` struct and `MakeBundle()` function that handles all common bundling logic. This enables rapid bundler development where most components can be implemented in ~50 lines.
 
 ### Design Principles
 
-**1. BaseBundler Helper Pattern**  
-**Rationale**: Eliminate boilerplate; consistent implementation; rapid development  
-**Implementation**: Struct embedding with common functionality (directory creation, file writing, template rendering, checksum generation)  
-**Benefits**: 75% less code per bundler; consistent error handling; built-in observability  
-**Trade-off**: Less customization flexibility vs development speed
+**1. Generic Bundler Framework (ComponentConfig + MakeBundle)**  
+**Rationale**: Declarative configuration; eliminate boilerplate; consistent implementation  
+**Implementation**: `ComponentConfig` struct defines component-specific settings; `MakeBundle()` handles all common steps  
+**Benefits**: ~50 lines per bundler; consistent error handling; built-in observability  
+**Components**: `internal.ComponentConfig`, `internal.MakeBundle()`, `internal.BundleMetadata`
 
-**2. Internal Utilities Package (Legacy Support)**  
-**Rationale**: Helper functions for recipe data extraction (not used in new RecipeResult-only architecture)  
-**Implementation**: 15+ helper functions for backward compatibility  
-**Note**: New bundlers use `GetComponentRef()` and `GetValuesForComponent()` instead  
-**Reference**: [pkg/bundler/internal](../../pkg/bundler/internal)
+**2. ComponentConfig Declarative Pattern**  
+**Pattern**: Define bundler behavior via struct configuration rather than procedural code  
+**Rationale**: Readable, testable, maintainable; easy to add new bundlers  
+**Implementation**: Required fields (Name, DisplayName, ValueOverrideKeys, TemplateGetter) plus optional extensions  
+**Extensions**: `MetadataFunc` for custom README metadata, `CustomManifestFunc` for additional K8s manifests
 
-**3. TestHarness for Standardized Testing**  
-**Rationale**: Consistent test structure; reduce test code; verify common requirements  
-**Implementation**: Reusable test fixture with automatic file verification and checksum validation  
-**Benefits**: 34% less test code; consistent coverage; automatic verification  
-**Usage**: `harness := internal.NewTestHarness(t, bundler); harness.RunTest(recipeResult, wantErr)`  
-**Pattern**: Create RecipeResult with ComponentRef → call Make() → verify files
+**3. BaseBundler Helper Pattern**  
+**Rationale**: Common file operations across all bundlers  
+**Implementation**: Struct embedding with methods (directory creation, file writing, template rendering, checksum generation)  
+**Reference**: [pkg/component/internal](../../pkg/component/internal)
 
 **4. Registry Pattern**  
 **Rationale**: Decoupled bundler registration; extensibility without modifying core code  
@@ -730,28 +728,6 @@ The Bundler Framework provides an extensible system for generating deployment bu
 **Implementation**: Values maps or BundleMetadata structs render directly in templates  
 **Reference**: [text/template](https://pkg.go.dev/text/template)
 
-**Data Flow (RecipeResult-only architecture):**
-```go
-// RecipeResult → Component Values → Templates (Direct)
-component := input.GetComponentRef(Name)         // Get component reference
-values := input.GetValuesForComponent(Name)      // Extract values map
-metadata := generateBundleMetadata(component, values)  // Build metadata struct
-b.GenerateFileFromTemplate(ctx, getter, "values.yaml", path, values, 0644)
-b.GenerateFileFromTemplate(ctx, getter, "README.md", path, map[string]interface{}{
-    "Values": values,
-    "Script": metadata, // "Script" key preserved for template compatibility
-}, 0644)
-// Templates: {{ index . "key" }} for maps, {{ .Script.Version }} for metadata
-```
-
-**Architecture Benefits:**
-- Type safety for struct-based templates (BundleMetadata)
-- Direct map access for values.yaml
-- ~200 lines of conversion code eliminated
-- Templates are self-documenting
-- IDE autocomplete for struct fields
-- Simpler debugging (no complex map[string]interface{} inspection needed)
-
 **7. Parallel Execution by Default**  
 **Pattern**: errgroup.WithContext for concurrent bundle generation  
 **Rationale**: Fast bundle creation; configurable fail-fast behavior  
@@ -762,170 +738,163 @@ b.GenerateFileFromTemplate(ctx, getter, "README.md", path, map[string]interface{
 
 ```mermaid
 flowchart TD
-    A[RecipeResult] --> B[Bundler.Make]
+    A[RecipeInput] --> B[MakeBundle]
     
-    B --> B1[GetComponentRef Name]
-    B --> B2[GetValuesForComponent Name]
-    B --> B3[BaseBundler.CreateBundleDir]
+    B --> B1[Extract component via GetComponentRef]
+    B --> B2[Extract values via GetValuesForComponent]
+    B --> B3[Apply value overrides from CLI]
+    B --> B4[Apply node selectors/tolerations]
     
-    B3 --> C{Parallel Generation}
+    B4 --> C[Create directory structure]
     
-    C --> C1[Generate Helm Values values map]
-    C --> C2[Generate Scripts ScriptData]
-    C --> C3[Generate README combined map]
+    C --> D1[Write values.yaml with header]
+    C --> D2[Call CustomManifestFunc if defined]
+    C --> D3[Generate README via MetadataFunc]
     
-    C1 --> D[BaseBundler.GenerateFileFromTemplate]
-    C2 --> D
-    C3 --> D
+    D1 --> E[Generate checksums]
+    D2 --> E
+    D3 --> E
     
-    D --> E[BaseBundler.GenerateResult]
-    E --> F[Compute SHA256 Checksums]
-    F --> G[Return BundleResult]
+    E --> F[Return Result]
 ```
 
 ### Bundler Interface
 
 ```go
-// Bundler generates deployment bundles from RecipeResult.
+// Bundler generates deployment bundles from RecipeInput.
 type Bundler interface {
     // Type returns the bundler type identifier.
-    Type() BundleType
+    Type() types.BundleType
     
     // Make generates a bundle in the specified directory.
-    // Returns a Result containing generated files, sizes, and any errors.
-    Make(ctx context.Context, input *result.RecipeResult, outputDir string) (*Result, error)
-    
-    // Validate checks if the RecipeResult contains required component.
-    Validate(ctx context.Context, input *result.RecipeResult) error
+    Make(ctx context.Context, input recipe.RecipeInput, dir string) (*result.Result, error)
 }
 
 // BaseBundler provides common bundler functionality.
-// Embed this in your bundler implementation instead of implementing from scratch.
+// Embed this in your bundler implementation.
 type BaseBundler struct {
-    bundlerType BundleType
-    templatesFS embed.FS
+    Config *config.Config
+    Type   types.BundleType
+    Result *result.Result
 }
 
 // BaseBundler methods (available to embedders):
-// - CreateBundleDir(path, subdirs...) error
-// - WriteFile(path, content []byte) error
+// - CreateBundleDir(dir, name) (*BundleDirs, error)
+// - WriteFile(path string, data []byte, perm os.FileMode) error
 // - GenerateFileFromTemplate(ctx, getter, name, path, data, perm) error
-// - GenerateResult(dir string, files []string) (*Result, error)
-// - TemplatesFS() embed.FS
+// - GenerateChecksums(ctx, dir) error
+// - Finalize(start time.Time)
+// - BuildConfigMapFromInput(input RecipeInput) map[string]string
+```
+
+### ComponentConfig Pattern
+
+The generic bundler framework uses `ComponentConfig` to define component-specific settings declaratively:
+
+```go
+// ComponentConfig defines all component-specific settings for a bundler.
+type ComponentConfig struct {
+    // Required fields
+    Name                  string                  // Component name (matches recipe)
+    DisplayName           string                  // Human-readable name for headers
+    ValueOverrideKeys     []string                // CLI --set prefix keys
+    DefaultHelmRepository string                  // Default Helm repo URL
+    DefaultHelmChart      string                  // Default Helm chart name
+    TemplateGetter        func(string) (string, bool)  // Template access function
+    
+    // Optional: Node scheduling paths
+    SystemNodeSelectorPaths      []string        // Paths for system node selectors
+    SystemTolerationPaths        []string        // Paths for system tolerations
+    AcceleratedNodeSelectorPaths []string        // Paths for GPU node selectors
+    AcceleratedTolerationPaths   []string        // Paths for GPU tolerations
+    
+    // Optional: Custom extensions
+    MetadataFunc       MetadataFunc       // Custom metadata for README templates
+    CustomManifestFunc CustomManifestFunc // Additional K8s manifest generation
+}
 ```
 
 ### GPU Operator Bundler (Example)
 
-**Implementation**: Uses BaseBundler embedding pattern  
-**Code Reduction**: 62% (501→188 lines with RecipeResult-only architecture)  
-**Output**: Helm values, installation scripts, README, checksums
+**Implementation**: Uses ComponentConfig + MakeBundle pattern  
+**Code Size**: ~80 lines total (bundler.go + register.go)  
+**Output**: Helm values, README, manifests (via CustomManifestFunc), checksums
 
-**Data Access with RecipeResult**:
+**ComponentConfig Definition**:
 ```go
-// Get component reference from RecipeResult
-component := input.GetComponentRef(Name)
-if component == nil {
-    return nil, fmt.Errorf(Name + " component not found in recipe result")
+var componentConfig = internal.ComponentConfig{
+    Name:                         Name,
+    DisplayName:                  "GPU Operator",
+    ValueOverrideKeys:            []string{"gpuoperator"},
+    DefaultHelmRepository:        "https://helm.ngc.nvidia.com/nvidia",
+    DefaultHelmChart:             "nvidia/gpu-operator",
+    TemplateGetter:               GetTemplate,
+    SystemNodeSelectorPaths:      []string{"operator.nodeSelector"},
+    SystemTolerationPaths:        []string{"operator.tolerations"},
+    AcceleratedNodeSelectorPaths: []string{"daemonsets.nodeSelector"},
+    AcceleratedTolerationPaths:   []string{"daemonsets.tolerations"},
+    CustomManifestFunc:           generateCustomManifests,  // DCGM exporter, kernel params
 }
 
-// Get values map (overrides already applied)
-values := input.GetValuesForComponent(Name)
-
-// Generate script metadata
-scriptData := generateScriptData(component, values)
+// Make delegates to generic MakeBundle function
+func (b *Bundler) Make(ctx context.Context, input recipe.RecipeInput, dir string) (*result.Result, error) {
+    return internal.MakeBundle(ctx, b.BaseBundler, input, dir, componentConfig)
+}
 ```
-
-**Key Features**:
-1. **Single Code Path**: makeFromRecipeResult() only - no dual routing
-2. **Component References**: Get values from RecipeResult, not Recipe measurements
-3. **Direct Values Access**: No measurement extraction needed
-4. **ScriptData for Metadata**: Namespace, version, repository info
-5. **TestHarness**: Standardized testing with RecipeResult + ComponentRef
-6. **File Structure**: bundler.go, scripts.go, bundler_test.go
 
 **Bundle Contents**:
 ```
 gpu-operator/
-├── values.yaml              # Helm chart values (from values map)
-├── scripts/
-│   ├── install.sh          # Installation script (from ScriptData)
-│   └── uninstall.sh        # Cleanup script (from ScriptData)
-├── README.md                # Documentation (combined map)
-└── checksums.txt            # SHA256 checksums
-```
-├── scripts/
-│   ├── install.sh          # Installation script
-│   └── uninstall.sh        # Uninstallation script
+├── values.yaml              # Helm chart values
+├── manifests/
+│   ├── dcgm-exporter-config.yaml    # Custom DCGM metrics
+│   └── kernel-module-params.yaml    # Kernel parameters
 ├── README.md                # Deployment instructions
 └── checksums.txt            # SHA256 checksums
 ```
 
-### Example: Adding a New Bundler with BaseBundler
+### Example: Adding a New Bundler with ComponentConfig
 
 ```go
-package networkoperator
+package mybundler
 
 import (
     "context"
-    "embed"
-    "fmt"
-    "path/filepath"
     
-    "github.com/NVIDIA/cloud-native-stack/pkg/bundler"
+    "github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
     "github.com/NVIDIA/cloud-native-stack/pkg/bundler/result"
+    "github.com/NVIDIA/cloud-native-stack/pkg/bundler/types"
+    "github.com/NVIDIA/cloud-native-stack/pkg/component/internal"
+    "github.com/NVIDIA/cloud-native-stack/pkg/recipe"
 )
 
-//go:embed templates/*.tmpl
-var templatesFS embed.FS
+const Name = "my-bundler"
 
-const bundlerType = bundler.BundleType("network-operator")
-
-func init() {
-    // Self-register using MustRegister (panics on duplicates)
-    bundler.MustRegister(bundlerType, NewBundler())
+// componentConfig defines all component-specific settings declaratively.
+var componentConfig = internal.ComponentConfig{
+    Name:                  Name,
+    DisplayName:           "My Bundler",
+    ValueOverrideKeys:     []string{"mybundler"},
+    DefaultHelmRepository: "https://charts.example.com",
+    DefaultHelmChart:      "example/my-bundler",
+    TemplateGetter:        GetTemplate,
 }
 
-// Bundler generates Network Operator deployment bundles.
+// Bundler generates deployment bundles from RecipeInput.
 type Bundler struct {
-    *bundler.BaseBundler  // Embed helper for common functionality
+    *internal.BaseBundler
 }
 
-// NewBundler creates a new Network Operator bundler instance.
-func NewBundler() *Bundler {
+// NewBundler creates a new bundler instance.
+func NewBundler(cfg *config.Config) *Bundler {
     return &Bundler{
-        BaseBundler: bundler.NewBaseBundler(bundlerType, templatesFS),
+        BaseBundler: internal.NewBaseBundler(cfg, types.BundleTypeMyBundler),
     }
 }
 
-// Make generates the bundle from RecipeResult.
-func (b *Bundler) Make(ctx context.Context, input *result.RecipeResult, 
-    outputDir string) (*bundler.Result, error) {
-    
-    // 1. Get component reference from RecipeResult
-    component := input.GetComponentRef(Name)
-    if component == nil {
-        return nil, fmt.Errorf(Name + " component not found in recipe result")
-    }
-    
-    // 2. Get values map (with overrides already applied)
-    values := input.GetValuesForComponent(Name)
-    
-    // 3. Create bundle directory structure
-    if err := b.CreateBundleDir(outputDir, "scripts"); err != nil {
-        return nil, err
-    }
-    
-    // 4. Generate script metadata
-    scriptData := generateScriptData(component, values)
-    
-    // 5. Generate files from templates
-    if err := b.GenerateFileFromTemplate(ctx, GetTemplate, "values.yaml",
-        filepath.Join(outputDir, "values.yaml"), values, 0644); err != nil {
-        return nil, err
-    }
-    
-    // 6. Generate result with checksums
-    return b.GenerateResult(outputDir, []string{"values.yaml"})
+// Make generates the bundle by delegating to the generic MakeBundle function.
+func (b *Bundler) Make(ctx context.Context, input recipe.RecipeInput, dir string) (*result.Result, error) {
+    return internal.MakeBundle(ctx, b.BaseBundler, input, dir, componentConfig)
 }
 ```
 
@@ -1057,11 +1026,6 @@ func TestBundler_Make(t *testing.T) {
 - `AssertFileExists(dir, file)` - Verify file existence
 - Automatic checksum validation
 - Automatic directory structure verification
-            }
-        })
-    }
-}
-```
 
 ### Future Enhancements
 
