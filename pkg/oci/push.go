@@ -39,6 +39,10 @@ const (
 	// Use cases: distributing CNS bundles (configs, assets) via OCI registries.
 	// Consumers that don't understand this type should treat it as a non-executable blob.
 	ArtifactType = "application/vnd.nvidia.cns.artifact"
+
+	// Default timestamp for reproducible builds.
+	// Use a fixed date (Unix epoch) to ensure builds are deterministic.
+	ReproducibleTimestamp = "1970-01-01T00:00:00Z"
 )
 
 // registryHostPattern validates registry host format (host:port or host).
@@ -64,9 +68,6 @@ type PackageOptions struct {
 	// Annotations are additional manifest annotations to include.
 	// Standard OCI annotations (org.opencontainers.image.*) are recommended.
 	Annotations map[string]string
-	// ReproducibleTimestamp sets a fixed timestamp for reproducible builds.
-	// This option is for programmatic use only and is not exposed via CLI flags.
-	ReproducibleTimestamp string
 }
 
 // PackageResult contains the result of local OCI packaging.
@@ -217,10 +218,8 @@ func Package(ctx context.Context, opts PackageOptions) (*PackageResult, error) {
 		packOpts.ManifestAnnotations[k] = v
 	}
 
-	// Add consistent creation timestamp to ensure reproducible builds
-	if opts.ReproducibleTimestamp != "" {
-		packOpts.ManifestAnnotations[ociv1.AnnotationCreated] = opts.ReproducibleTimestamp
-	}
+	// Always add consistent creation timestamp to ensure reproducible builds
+	packOpts.ManifestAnnotations[ociv1.AnnotationCreated] = ReproducibleTimestamp
 
 	manifestDesc, err := oras.PackManifest(ctx, fs, oras.PackManifestVersion1_1, ArtifactType, packOpts)
 	if err != nil {

@@ -639,7 +639,7 @@ func TestOCIReproducibleBuild(t *testing.T) {
 			Layers: []ociv1.Descriptor{layerDesc},
 			// Use fixed timestamp for reproducible manifest
 			ManifestAnnotations: map[string]string{
-				ociv1.AnnotationCreated: "2000-01-01T00:00:00Z",
+				ociv1.AnnotationCreated: ReproducibleTimestamp,
 			},
 		}
 		manifestDesc, err := oras.PackManifest(ctx, fs, oras.PackManifestVersion1_1, ArtifactType, packOpts)
@@ -1017,12 +1017,11 @@ func TestPackage_MorePaths(t *testing.T) {
 		}
 
 		result, err := Package(ctx, PackageOptions{
-			SourceDir:             sourceDir,
-			OutputDir:             t.TempDir(),
-			Registry:              "ghcr.io",
-			Repository:            "test/repo",
-			Tag:                   "v1.0.0",
-			ReproducibleTimestamp: "2025-01-01T00:00:00Z",
+			SourceDir:  sourceDir,
+			OutputDir:  t.TempDir(),
+			Registry:   "ghcr.io",
+			Repository: "test/repo",
+			Tag:        "v1.0.0",
 		})
 		if err != nil {
 			t.Fatalf("Package() error = %v", err)

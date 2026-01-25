@@ -139,10 +139,6 @@ type OutputConfig struct {
 	// Annotations are additional manifest annotations to include.
 	// If nil, default CNS annotations will be used.
 	Annotations map[string]string
-	// ReproducibleTimestamp sets a fixed timestamp for reproducible builds.
-	// If set, this value will be used for org.opencontainers.image.created annotation.
-	// If empty, ORAS will use the current time (breaking reproducibility).
-	ReproducibleTimestamp string
 }
 
 // PackageAndPushResult contains the result of a successful package and push operation.
@@ -195,13 +191,12 @@ func PackageAndPush(ctx context.Context, cfg OutputConfig) (*PackageAndPushResul
 
 	// Package locally first
 	packageResult, err := Package(ctx, PackageOptions{
-		SourceDir:             absSourceDir,
-		OutputDir:             absOutputDir,
-		Registry:              cfg.Reference.Registry,
-		Repository:            cfg.Reference.Repository,
-		Tag:                   cfg.Reference.Tag,
-		Annotations:           annotations,
-		ReproducibleTimestamp: cfg.ReproducibleTimestamp,
+		SourceDir:   absSourceDir,
+		OutputDir:   absOutputDir,
+		Registry:    cfg.Reference.Registry,
+		Repository:  cfg.Reference.Repository,
+		Tag:         cfg.Reference.Tag,
+		Annotations: annotations,
 	})
 	if err != nil {
 		return nil, apperrors.Wrap(apperrors.ErrCodeInternal, "failed to package OCI artifact", err)

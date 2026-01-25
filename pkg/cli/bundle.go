@@ -291,13 +291,12 @@ Package with explicit tag (overrides CLI version):
 			// Package and push as OCI artifact when output is oci://
 			if opts.ociRef != nil {
 				pushResult, ociErr := oci.PackageAndPush(ctx, oci.OutputConfig{
-					SourceDir:             opts.outputDir,
-					OutputDir:             opts.outputDir,
-					Reference:             opts.ociRef,
-					Version:               version,
-					PlainHTTP:             opts.plainHTTP,
-					InsecureTLS:           opts.insecureTLS,
-					ReproducibleTimestamp: "2000-01-01T00:00:00Z",
+					SourceDir:   opts.outputDir,
+					OutputDir:   opts.outputDir,
+					Reference:   opts.ociRef,
+					Version:     version,
+					PlainHTTP:   opts.plainHTTP,
+					InsecureTLS: opts.insecureTLS,
 				})
 				if ociErr != nil {
 					return ociErr
