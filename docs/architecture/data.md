@@ -41,9 +41,11 @@ pkg/recipe/data/
     │   └── values-eks-training.yaml # EKS training-optimized values
     ├── network-operator/
     │   └── values.yaml
+    ├── nvidia-dra-driver-gpu/
+    │   └── values.yaml
     ├── nvsentinel/
     │   └── values.yaml
-    └── skyhook/
+    └── skyhook-operator/
         └── values.yaml
 ```
 

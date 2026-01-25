@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
+	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/registry"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/result"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/types"
 	common "github.com/NVIDIA/cloud-native-stack/pkg/component/internal"
@@ -13,6 +14,13 @@ import (
 const (
 	Name = "nvsentinel"
 )
+
+func init() {
+	// Register NVSentinel bundler factory in global registry
+	registry.MustRegister(types.BundleTypeNVSentinel, func(cfg *config.Config) registry.Bundler {
+		return NewBundler(cfg)
+	})
+}
 
 // componentConfig defines the NVSentinel bundler configuration.
 var componentConfig = common.ComponentConfig{

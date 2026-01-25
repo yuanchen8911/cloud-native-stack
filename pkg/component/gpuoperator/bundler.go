@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
+	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/registry"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/result"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/types"
 	common "github.com/NVIDIA/cloud-native-stack/pkg/component/internal"
@@ -17,6 +18,13 @@ const (
 	DefaultHelmRepository = "https://helm.ngc.nvidia.com/nvidia"
 	DefaultHelmChart      = "nvidia/gpu-operator"
 )
+
+func init() {
+	// Register GPU Operator bundler factory in global registry
+	registry.MustRegister(types.BundleTypeGpuOperator, func(cfg *config.Config) registry.Bundler {
+		return NewBundler(cfg)
+	})
+}
 
 // componentConfig defines the GPU Operator bundler configuration.
 var componentConfig = common.ComponentConfig{

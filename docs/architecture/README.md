@@ -763,9 +763,6 @@ flowchart TD
 ```go
 // Bundler generates deployment bundles from RecipeInput.
 type Bundler interface {
-    // Type returns the bundler type identifier.
-    Type() types.BundleType
-    
     // Make generates a bundle in the specified directory.
     Make(ctx context.Context, input recipe.RecipeInput, dir string) (*result.Result, error)
 }
@@ -774,17 +771,16 @@ type Bundler interface {
 // Embed this in your bundler implementation.
 type BaseBundler struct {
     Config *config.Config
-    Type   types.BundleType
     Result *result.Result
 }
 
 // BaseBundler methods (available to embedders):
-// - CreateBundleDir(dir, name) (*BundleDirs, error)
+// - CreateBundleDir(outputDir, bundleName) (BundleDirectories, error)
 // - WriteFile(path string, data []byte, perm os.FileMode) error
 // - GenerateFileFromTemplate(ctx, getter, name, path, data, perm) error
 // - GenerateChecksums(ctx, dir) error
 // - Finalize(start time.Time)
-// - BuildConfigMapFromInput(input RecipeInput) map[string]string
+// - BuildConfigMapFromInput(input) map[string]string
 ```
 
 ### ComponentConfig Pattern
@@ -817,23 +813,28 @@ type ComponentConfig struct {
 ### GPU Operator Bundler (Example)
 
 **Implementation**: Uses ComponentConfig + MakeBundle pattern  
-**Code Size**: ~80 lines total (bundler.go + register.go)  
+**Code Size**: ~85 lines total (bundler.go)  
 **Output**: Helm values, README, manifests (via CustomManifestFunc), checksums
 
 **ComponentConfig Definition**:
 ```go
 var componentConfig = internal.ComponentConfig{
-    Name:                         Name,
-    DisplayName:                  "GPU Operator",
-    ValueOverrideKeys:            []string{"gpuoperator"},
-    DefaultHelmRepository:        "https://helm.ngc.nvidia.com/nvidia",
-    DefaultHelmChart:             "nvidia/gpu-operator",
-    TemplateGetter:               GetTemplate,
-    SystemNodeSelectorPaths:      []string{"operator.nodeSelector"},
-    SystemTolerationPaths:        []string{"operator.tolerations"},
-    AcceleratedNodeSelectorPaths: []string{"daemonsets.nodeSelector"},
-    AcceleratedTolerationPaths:   []string{"daemonsets.tolerations"},
-    CustomManifestFunc:           generateCustomManifests,  // DCGM exporter, kernel params
+    Name:                  Name,
+    DisplayName:           "gpu-operator",
+    ValueOverrideKeys:     []string{"gpuoperator"},
+    DefaultHelmRepository: "https://helm.ngc.nvidia.com/nvidia",
+    DefaultHelmChart:      "nvidia/gpu-operator",
+    TemplateGetter:        GetTemplate,
+    SystemNodeSelectorPaths: []string{
+        "operator.nodeSelector",
+        "node-feature-discovery.gc.nodeSelector",
+        "node-feature-discovery.master.nodeSelector",
+    },
+    AcceleratedNodeSelectorPaths: []string{
+        "daemonsets.nodeSelector",
+        "node-feature-discovery.worker.nodeSelector",
+    },
+    CustomManifestFunc: generateCustomManifests, // DCGM exporter, kernel params
 }
 
 // Make delegates to generic MakeBundle function
@@ -847,8 +848,8 @@ func (b *Bundler) Make(ctx context.Context, input recipe.RecipeInput, dir string
 gpu-operator/
 ├── values.yaml              # Helm chart values
 ├── manifests/
-│   ├── dcgm-exporter-config.yaml    # Custom DCGM metrics
-│   └── kernel-module-params.yaml    # Kernel parameters
+│   ├── dcgm-exporter.yaml           # Custom DCGM metrics (conditional)
+│   └── kernel-module-params.yaml    # Kernel parameters (GB200 only)
 ├── README.md                # Deployment instructions
 └── checksums.txt            # SHA256 checksums
 ```
@@ -983,49 +984,46 @@ bundler_validation_failures_total{bundler_type="gpu-operator"}
 **Example Test with TestHarness**:
 ```go
 func TestBundler_Make(t *testing.T) {
-    // Use TestHarness for consistent testing (reduces code by 34%)
-    harness := internal.NewTestHarness(t, NewBundler())
-    
-    tests := []struct {
-        name    string
-        recipe  *recipe.Recipe
-        wantErr bool
-        verify  func(t *testing.T, outputDir string)
-    }{
-        {
-            name:    "complete recipe",
-            recipe:  createTestRecipe(),
-            wantErr: false,
-            verify: func(t *testing.T, outputDir string) {
-                // TestHarness automatically verifies:
-                // - All expected files exist
-                // - Checksums are valid
-                // - Directory structure is correct
-                
-                // Additional custom verification
-                harness.AssertFileContains(outputDir, "values.yaml",
-                    "gpu-operator:", "version: v25.3.1")
-            },
-        },
-    }
-    
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            result := harness.RunTest(tt.recipe, tt.wantErr)
-            if !tt.wantErr && tt.verify != nil {
-                tt.verify(t, result.OutputDir)
-            }
-        })
-    }
+    // Create harness with bundler name for directory verification
+    h := internal.NewTestHarness(t, "gpu-operator").
+        WithExpectedFiles([]string{"values.yaml", "README.md"})
+
+    // Create bundler with test config
+    bundler := NewBundler(config.NewConfig())
+
+    // Run test - automatically verifies result and files
+    h.TestMake(bundler)
+}
+
+func TestBundler_MakeWithRecipeResult(t *testing.T) {
+    h := internal.NewTestHarness(t, "gpu-operator").
+        WithExpectedFiles([]string{"values.yaml", "README.md"})
+
+    bundler := NewBundler(config.NewConfig())
+
+    // Build a RecipeResult with component overrides
+    recipeResult := internal.NewRecipeResultBuilder().
+        WithComponentAndSource("gpu-operator", "v25.3.3",
+            "https://helm.ngc.nvidia.com/nvidia",
+            map[string]interface{}{
+                "driver": map[string]interface{}{
+                    "enabled": true,
+                },
+            }).
+        Build()
+
+    h.TestMakeWithRecipeResult(bundler, recipeResult)
 }
 ```
 
 **TestHarness Methods**:
-- `RunTest(recipe, wantErr)` - Execute bundler and verify basic requirements
-- `AssertFileContains(dir, file, patterns...)` - Verify file content
+- `NewTestHarness(t, bundlerName)` - Create harness for a bundler
+- `WithExpectedFiles(files)` - Set expected output files
+- `WithRecipeBuilder(builder)` - Set custom recipe builder
+- `TestMake(bundler)` - Execute bundler with default recipe
+- `TestMakeWithRecipeResult(bundler, result)` - Execute with RecipeResult
 - `AssertFileExists(dir, file)` - Verify file existence
-- Automatic checksum validation
-- Automatic directory structure verification
+- `AssertResult(result, dir)` - Verify result and directory structure
 
 ### Future Enhancements
 

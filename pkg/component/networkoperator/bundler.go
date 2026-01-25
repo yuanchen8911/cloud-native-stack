@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
+	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/registry"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/result"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/types"
 	"github.com/NVIDIA/cloud-native-stack/pkg/component/internal"
@@ -13,6 +14,13 @@ import (
 const (
 	Name = "network-operator"
 )
+
+func init() {
+	// Register Network Operator bundler factory in global registry
+	registry.MustRegister(types.BundleTypeNetworkOperator, func(cfg *config.Config) registry.Bundler {
+		return NewBundler(cfg)
+	})
+}
 
 // componentConfig defines the Network Operator bundler configuration.
 var componentConfig = internal.ComponentConfig{
