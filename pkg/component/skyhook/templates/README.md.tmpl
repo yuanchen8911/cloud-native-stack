@@ -63,13 +63,13 @@ chmod +x scripts/install.sh
 
 2. **Add Helm repository**:
    ```bash
-   helm repo add skyhook {{ .Script.HelmChartRepo }}
+   helm repo add skyhook {{ .Script.HelmRepository }}
    helm repo update
    ```
 
 3. **Install operator**:
    ```bash
-   helm upgrade --install {{ .Script.HelmReleaseName }} skyhook/{{ .Script.HelmChartName }} \
+   helm upgrade --install {{ .Script.HelmReleaseName }} skyhook/{{ index .Script.Extensions "HelmChartName" }} \
      --namespace {{ .Script.Namespace }} \
      --create-namespace \
      --values values.yaml \

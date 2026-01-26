@@ -22,14 +22,14 @@
 //   - Node selector paths for controller, webhook, cainjector, and startupapicheck
 //   - Default Helm repository (https://charts.jetstack.io)
 //   - Default Helm chart (jetstack/cert-manager)
-//   - Custom MetadataFunc for InstallCRDs field
+//   - MetadataExtensions for InstallCRDs field
 //
 // # Custom Metadata
 //
-// This bundler provides custom metadata via MetadataFunc to include:
+// This bundler provides custom metadata via MetadataExtensions to include:
 //   - InstallCRDs: Boolean flag for CRD installation (always true)
 //
-// This additional field is used in README templates for installation instructions.
+// This additional field is accessible in templates via {{ .Script.Extensions.InstallCRDs }}.
 //
 // # Usage
 //

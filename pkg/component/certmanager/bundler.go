@@ -2,6 +2,7 @@ package certmanager
 
 import (
 	"context"
+	_ "embed"
 
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/registry"
@@ -15,6 +16,14 @@ const (
 	Name = "cert-manager"
 )
 
+var (
+	//go:embed templates/README.md.tmpl
+	readmeTemplate string
+
+	// GetTemplate returns the named template content for README and manifest generation.
+	GetTemplate = internal.StandardTemplates(readmeTemplate)
+)
+
 func init() {
 	// Register cert-manager bundler factory in global registry
 	registry.MustRegister(types.BundleTypeCertManager, func(cfg *config.Config) registry.Bundler {
@@ -24,9 +33,12 @@ func init() {
 
 // componentConfig defines the cert-manager bundler configuration.
 var componentConfig = internal.ComponentConfig{
-	Name:              Name,
-	DisplayName:       "cert-manager",
-	ValueOverrideKeys: []string{"certmanager"},
+	Name:                    Name,
+	DisplayName:             "cert-manager",
+	ValueOverrideKeys:       []string{"certmanager"},
+	DefaultHelmRepository:   "https://charts.jetstack.io",
+	DefaultHelmChart:        "jetstack/cert-manager",
+	DefaultHelmChartVersion: "v1.17.2",
 	SystemNodeSelectorPaths: []string{
 		"nodeSelector",
 		"webhook.nodeSelector",
@@ -39,11 +51,9 @@ var componentConfig = internal.ComponentConfig{
 		"cainjector.tolerations",
 		"startupapicheck.tolerations",
 	},
-	DefaultHelmRepository: "https://charts.jetstack.io",
-	DefaultHelmChart:      "jetstack/cert-manager",
-	TemplateGetter:        GetTemplate,
-	MetadataFunc: func(configMap map[string]string) interface{} {
-		return GenerateBundleMetadata(configMap)
+	TemplateGetter: GetTemplate,
+	MetadataExtensions: map[string]interface{}{
+		"InstallCRDs": true,
 	},
 }
 

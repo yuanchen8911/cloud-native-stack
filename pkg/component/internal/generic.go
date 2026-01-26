@@ -47,8 +47,16 @@ type ComponentConfig struct {
 	// DefaultHelmChart is the chart name (e.g., "nvidia/gpu-operator").
 	DefaultHelmChart string
 
+	// DefaultHelmChartVersion is the default chart version if not specified in recipe.
+	DefaultHelmChartVersion string
+
 	// TemplateGetter is the function that retrieves templates by name.
+	// If nil, TemplateNames will be used with the embedded TemplatesFS.
 	TemplateGetter TemplateFunc
+
+	// TemplateNames lists the template files to embed (e.g., ["README.md"]).
+	// Used with auto-generated template getter when TemplateGetter is nil.
+	TemplateNames []string
 
 	// CustomManifestFunc is an optional function to generate additional manifests.
 	// It receives the values map, config map, and output directory.
@@ -58,6 +66,11 @@ type ComponentConfig struct {
 	// MetadataFunc creates component-specific metadata for templates.
 	// If nil, the default BundleMetadata is used.
 	MetadataFunc MetadataFunc
+
+	// MetadataExtensions provides additional fields for BundleMetadata.
+	// These are merged into the Extensions map of the generated metadata.
+	// Use this instead of MetadataFunc for simple extensions.
+	MetadataExtensions map[string]interface{}
 }
 
 // CustomManifestFunc is a function type for generating custom manifests.
@@ -70,13 +83,20 @@ type MetadataFunc func(configMap map[string]string) interface{}
 
 // BundleMetadata contains common metadata used for README and manifest template rendering.
 // This is the default metadata structure used when MetadataFunc is not provided.
+// The Extensions map allows component-specific fields without custom structs.
 type BundleMetadata struct {
+	// Common fields used by all components
 	Namespace        string
 	HelmRepository   string
 	HelmChart        string
 	HelmChartVersion string
+	HelmReleaseName  string
 	Version          string
 	RecipeVersion    string
+
+	// Extensions holds component-specific fields.
+	// Templates can access these via {{ .Script.Extensions.FieldName }}
+	Extensions map[string]interface{}
 }
 
 // GenerateDefaultBundleMetadata creates default bundle metadata from config map.
@@ -86,9 +106,31 @@ func GenerateDefaultBundleMetadata(config map[string]string, name string, defaul
 		HelmRepository:   GetConfigValue(config, "helm_repository", defaultHelmRepo),
 		HelmChart:        defaultHelmChart,
 		HelmChartVersion: GetConfigValue(config, "helm_chart_version", ""),
+		HelmReleaseName:  name,
 		Version:          GetBundlerVersion(config),
 		RecipeVersion:    GetRecipeBundlerVersion(config),
+		Extensions:       make(map[string]interface{}),
 	}
+}
+
+// GenerateBundleMetadataWithExtensions creates bundle metadata with custom extensions.
+// This is used when components need additional fields beyond the standard ones.
+func GenerateBundleMetadataWithExtensions(config map[string]string, cfg ComponentConfig) *BundleMetadata {
+	meta := GenerateDefaultBundleMetadata(config, cfg.Name, cfg.DefaultHelmRepository, cfg.DefaultHelmChart)
+
+	// Apply default chart version if specified in config
+	if cfg.DefaultHelmChartVersion != "" && meta.HelmChartVersion == "" {
+		meta.HelmChartVersion = cfg.DefaultHelmChartVersion
+	}
+
+	// Merge extensions from component config
+	if cfg.MetadataExtensions != nil {
+		for k, v := range cfg.MetadataExtensions {
+			meta.Extensions[k] = v
+		}
+	}
+
+	return meta
 }
 
 // MakeBundle generates a bundle using the generic bundling logic.
@@ -196,7 +238,7 @@ func MakeBundle(ctx context.Context, b *BaseBundler, input recipe.RecipeInput, o
 	if cfg.MetadataFunc != nil {
 		metadata = cfg.MetadataFunc(configMap)
 	} else {
-		metadata = GenerateDefaultBundleMetadata(configMap, cfg.Name, cfg.DefaultHelmRepository, cfg.DefaultHelmChart)
+		metadata = GenerateBundleMetadataWithExtensions(configMap, cfg)
 	}
 
 	// Create combined data for README (values map + metadata)

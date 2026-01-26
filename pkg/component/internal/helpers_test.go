@@ -571,3 +571,126 @@ func TestParseBoolString(t *testing.T) {
 		})
 	}
 }
+
+func TestMarshalYAMLWithHeader(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   interface{}
+		header  ValuesHeader
+		verify  func(t *testing.T, result string)
+		wantErr bool
+	}{
+		{
+			name:  "includes header with all fields",
+			value: map[string]string{"key": "value"},
+			header: ValuesHeader{
+				ComponentName:  "GPU Operator",
+				BundlerVersion: "1.2.3",
+				RecipeVersion:  "2.0.0",
+			},
+			verify: func(t *testing.T, result string) {
+				if !contains(result, "# GPU Operator Helm Values") {
+					t.Error("missing component name in header")
+				}
+				if !contains(result, "# Bundler Version: 1.2.3") {
+					t.Error("missing bundler version in header")
+				}
+				if !contains(result, "# Recipe Version: 2.0.0") {
+					t.Error("missing recipe version in header")
+				}
+				if !contains(result, "key: value") {
+					t.Error("missing YAML content")
+				}
+			},
+		},
+		{
+			name:  "handles empty header fields",
+			value: map[string]string{"test": "data"},
+			header: ValuesHeader{
+				ComponentName:  "",
+				BundlerVersion: "",
+				RecipeVersion:  "",
+			},
+			verify: func(t *testing.T, result string) {
+				if !contains(result, "# Generated from Cloud Native Stack Recipe") {
+					t.Error("missing standard header line")
+				}
+				if !contains(result, "test: data") {
+					t.Error("missing YAML content")
+				}
+			},
+		},
+		{
+			name: "handles complex nested structure",
+			value: map[string]interface{}{
+				"driver": map[string]interface{}{
+					"version": "550.0.0",
+					"enabled": true,
+				},
+				"mig": map[string]interface{}{
+					"strategy": "mixed",
+				},
+			},
+			header: ValuesHeader{
+				ComponentName:  "Test Component",
+				BundlerVersion: "v1.0.0",
+				RecipeVersion:  "v2.0.0",
+			},
+			verify: func(t *testing.T, result string) {
+				if !contains(result, "driver:") {
+					t.Error("missing driver section")
+				}
+				if !contains(result, "version: 550.0.0") {
+					t.Error("missing driver version")
+				}
+				if !contains(result, "mig:") {
+					t.Error("missing mig section")
+				}
+			},
+		},
+		{
+			name:  "handles nil value",
+			value: nil,
+			header: ValuesHeader{
+				ComponentName:  "Test",
+				BundlerVersion: "1.0.0",
+				RecipeVersion:  "1.0.0",
+			},
+			verify: func(t *testing.T, result string) {
+				if !contains(result, "null") {
+					t.Error("nil should serialize to null")
+				}
+			},
+		},
+		{
+			name:  "handles slice values",
+			value: []string{"item1", "item2"},
+			header: ValuesHeader{
+				ComponentName:  "List Test",
+				BundlerVersion: "1.0.0",
+				RecipeVersion:  "1.0.0",
+			},
+			verify: func(t *testing.T, result string) {
+				if !contains(result, "- item1") {
+					t.Error("missing first item")
+				}
+				if !contains(result, "- item2") {
+					t.Error("missing second item")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := MarshalYAMLWithHeader(tt.value, tt.header)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("MarshalYAMLWithHeader() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && tt.verify != nil {
+				tt.verify(t, string(got))
+			}
+		})
+	}
+}

@@ -112,6 +112,12 @@ Check bundle content:
 tree .
 ```
 
+Review the checksums: 
+
+```shell
+cat checksums.txt
+```
+
 Check the integrity of its content
 
 ```shell

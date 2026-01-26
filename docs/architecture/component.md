@@ -91,10 +91,10 @@ That's it! The `MakeBundle()` function handles:
 
 #### Custom Metadata
 
-For components that need additional metadata beyond the defaults, provide a `MetadataFunc`:
+For components that need additional metadata beyond the defaults, provide `MetadataExtensions`:
 
 ```go
-// componentConfig with custom metadata function
+// componentConfig with custom metadata extensions
 var componentConfig = internal.ComponentConfig{
     Name:                  Name,
     DisplayName:           "Cert Manager",
@@ -102,31 +102,14 @@ var componentConfig = internal.ComponentConfig{
     DefaultHelmRepository: "https://charts.jetstack.io",
     DefaultHelmChart:      "jetstack/cert-manager",
     TemplateGetter:        GetTemplate,
-    // Custom metadata adds InstallCRDs field
-    MetadataFunc: func(configMap map[string]string) interface{} {
-        return &BundleMetadata{
-            Namespace:        internal.GetConfigValue(configMap, "namespace", Name),
-            HelmRepository:   internal.GetConfigValue(configMap, "helm_repository", "https://charts.jetstack.io"),
-            HelmChart:        "jetstack/cert-manager",
-            HelmChartVersion: internal.GetConfigValue(configMap, "helm_chart_version", ""),
-            Version:          internal.GetBundlerVersion(configMap),
-            RecipeVersion:    internal.GetRecipeBundlerVersion(configMap),
-            InstallCRDs:      true,
-        }
+    // Custom metadata adds InstallCRDs field accessible in templates
+    MetadataExtensions: map[string]interface{}{
+        "InstallCRDs": true,
     },
 }
-
-// BundleMetadata extends the default with component-specific fields.
-type BundleMetadata struct {
-    Namespace        string
-    HelmRepository   string
-    HelmChart        string
-    HelmChartVersion string
-    Version          string
-    RecipeVersion    string
-    InstallCRDs      bool
-}
 ```
+
+Access extensions in templates via `{{ .Script.Extensions.InstallCRDs }}`.
 
 #### Custom Manifest Generation
 
@@ -161,29 +144,34 @@ var componentConfig = internal.ComponentConfig{
 }
 ```
 
-#### Templates (templates.go + templates/)
+#### Templates (bundler.go + templates/)
 
-Templates are embedded using `go:embed` and accessed via a `GetTemplate` function:
+Templates are embedded in `bundler.go` using `go:embed` and accessed via `StandardTemplates`:
 
 ```go
-// pkg/component/mybundler/templates.go
+// pkg/component/mybundler/bundler.go
 package mybundler
 
 import (
     _ "embed"
+    // ... other imports
+    "github.com/NVIDIA/cloud-native-stack/pkg/component/internal"
 )
 
-//go:embed templates/README.md.tmpl
-var readmeTemplate string
+var (
+    //go:embed templates/README.md.tmpl
+    readmeTemplate string
 
-// GetTemplate returns the named template content.
-func GetTemplate(name string) (string, bool) {
-    templates := map[string]string{
-        "README.md": readmeTemplate,
-    }
-    tmpl, ok := templates[name]
-    return tmpl, ok
-}
+    // GetTemplate returns template content using StandardTemplates helper.
+    // For bundlers with just a README template, this is the recommended approach.
+    GetTemplate = internal.StandardTemplates(readmeTemplate)
+)
+
+// For bundlers needing multiple templates, use NewTemplateGetter:
+// GetTemplate = internal.NewTemplateGetter(map[string]string{
+//     "README.md":     readmeTemplate,
+//     "custom.yaml":   customTemplate,
+// })
 ```
 
 **Template files** in `templates/` directory:

@@ -18,16 +18,13 @@
 //
 // This bundler uses the generic bundler framework from [internal.ComponentConfig]
 // and [internal.MakeBundle]. The componentConfig variable defines:
-//   - Default Helm repository (https://helm.ngc.nvidia.com/nvstaging)
-//   - Default Helm chart (nvstaging/nvsentinel)
-//   - Custom MetadataFunc for NVSentinel-specific fields
+//   - Default Helm repository (https://helm.ngc.nvidia.com/nvidia)
+//   - Default Helm chart (nvidia/nvsentinel)
+//   - Default chart version (v0.6.0)
+//   - Node selector and toleration paths for workload placement
 //
-// # Custom Metadata
-//
-// This bundler provides custom metadata via MetadataFunc to include:
-//   - HelmReleaseName: Release name for Helm installation
-//   - NVSentinelVersion: Version of NVSentinel being deployed
-//   - HelmChartRepo: Repository URL for chart installation
+// This is a minimal bundler implementation using the generic framework without
+// custom metadata extensions or manifest generation.
 //
 // # Usage
 //

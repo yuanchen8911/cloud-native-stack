@@ -2,6 +2,7 @@ package gpuoperator
 
 import (
 	"context"
+	_ "embed"
 	"path/filepath"
 	"strings"
 
@@ -17,6 +18,24 @@ const (
 	Name                  = "gpu-operator"
 	DefaultHelmRepository = "https://helm.ngc.nvidia.com/nvidia"
 	DefaultHelmChart      = "nvidia/gpu-operator"
+)
+
+var (
+	//go:embed templates/README.md.tmpl
+	readmeTemplate string
+
+	//go:embed templates/kernel-module-params.yaml.tmpl
+	kernelModuleParamsTemplate string
+
+	//go:embed templates/dcgm-exporter.yaml.tmpl
+	dcgmExporterTemplate string
+
+	// GetTemplate returns the named template content for README and manifest generation.
+	GetTemplate = common.NewTemplateGetter(map[string]string{
+		"README.md":            readmeTemplate,
+		"kernel-module-params": kernelModuleParamsTemplate,
+		"dcgm-exporter":        dcgmExporterTemplate,
+	})
 )
 
 func init() {

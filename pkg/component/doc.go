@@ -51,10 +51,20 @@
 //  3. Create a Bundler struct that embeds [internal.BaseBundler]
 //  4. Implement Make() by calling [internal.MakeBundle] with your config
 //  5. Self-register in init() using [registry.MustRegister]
-//  6. Add templates using go:embed directive
+//  6. Add templates in a templates/ subdirectory using go:embed directive
+//  7. Use [internal.StandardTemplates] for the common case of just a README template
 //
-// For components with custom metadata fields, provide a MetadataFunc in the config.
-// For components needing custom manifests, provide a CustomManifestFunc.
+// For components with custom metadata fields (used in README templates),
+// provide MetadataExtensions in the ComponentConfig. For components needing
+// custom Kubernetes manifests, provide a CustomManifestFunc.
+//
+// # Package Structure
+//
+// Each component package should contain:
+//   - bundler.go: ComponentConfig, Bundler struct, NewBundler, Make, embedded templates
+//   - bundler_test.go: Tests using [internal.RunStandardBundlerTests]
+//   - doc.go: Package documentation
+//   - templates/README.md.tmpl: README template for deployment instructions
 //
 // See pkg/component/networkoperator for a minimal example, or
 // pkg/component/gpuoperator for an example with custom manifest generation.

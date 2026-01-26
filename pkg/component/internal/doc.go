@@ -12,10 +12,10 @@
 //   - Name and DisplayName for identification
 //   - ValueOverrideKeys for CLI --set flag mapping
 //   - Node selector and toleration paths for workload placement
-//   - DefaultHelmRepository and DefaultHelmChart for Helm deployment
+//   - DefaultHelmRepository, DefaultHelmChart, DefaultHelmChartVersion for Helm deployment
 //   - TemplateGetter function for embedded templates
 //   - Optional CustomManifestFunc for generating additional manifests
-//   - Optional MetadataFunc for custom README template data
+//   - Optional MetadataExtensions map for custom README template data (preferred over MetadataFunc)
 //
 // MakeBundle: Generic function that handles all common bundling steps:
 //   - Extracting component values from recipe input
@@ -57,17 +57,21 @@
 // # Custom Metadata
 //
 // Components that need additional template data beyond the default BundleMetadata
-// can provide a MetadataFunc:
+// can provide a MetadataExtensions map in ComponentConfig:
 //
 //	var componentConfig = internal.ComponentConfig{
 //	    // ... other fields ...
-//	    MetadataFunc: func(configMap map[string]string) interface{} {
-//	        return &CustomMetadata{
-//	            Namespace:   internal.GetConfigValue(configMap, "namespace", "default"),
-//	            CustomField: "custom-value",
-//	        }
+//	    MetadataExtensions: map[string]interface{}{
+//	        "InstallCRDs":   true,
+//	        "CustomField":   "custom-value",
 //	    },
 //	}
+//
+// These extensions are merged into the BundleMetadata.Extensions map and can be
+// accessed in templates via {{ .Script.Extensions.InstallCRDs }}.
+//
+// For more complex metadata requirements, MetadataFunc is still supported but
+// MetadataExtensions is preferred for simple key-value additions.
 //
 // # Custom Manifest Generation
 //

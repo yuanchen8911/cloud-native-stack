@@ -2,6 +2,7 @@ package nvsentinel
 
 import (
 	"context"
+	_ "embed"
 
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/registry"
@@ -15,6 +16,14 @@ const (
 	Name = "nvsentinel"
 )
 
+var (
+	//go:embed templates/README.md.tmpl
+	readmeTemplate string
+
+	// GetTemplate returns the named template content for README and manifest generation.
+	GetTemplate = common.StandardTemplates(readmeTemplate)
+)
+
 func init() {
 	// Register NVSentinel bundler factory in global registry
 	registry.MustRegister(types.BundleTypeNVSentinel, func(cfg *config.Config) registry.Bundler {
@@ -24,21 +33,19 @@ func init() {
 
 // componentConfig defines the NVSentinel bundler configuration.
 var componentConfig = common.ComponentConfig{
-	Name:              Name,
-	DisplayName:       "nvsentinel",
-	ValueOverrideKeys: []string{"nv-sentinel"},
+	Name:                    Name,
+	DisplayName:             "nvsentinel",
+	ValueOverrideKeys:       []string{"nv-sentinel"},
+	DefaultHelmRepository:   "https://helm.ngc.nvidia.com/nvidia",
+	DefaultHelmChart:        "nvidia/nvsentinel",
+	DefaultHelmChartVersion: "v0.6.0",
 	SystemNodeSelectorPaths: []string{
 		"global.systemNodeSelector",
 	},
 	AcceleratedTolerationPaths: []string{
 		"global.tolerations",
 	},
-	DefaultHelmRepository: "https://helm.ngc.nvidia.com/nvidia",
-	DefaultHelmChart:      "nvidia/nvsentinel",
-	TemplateGetter:        GetTemplate,
-	MetadataFunc: func(configMap map[string]string) interface{} {
-		return GenerateBundleMetadata(configMap)
-	},
+	TemplateGetter: GetTemplate,
 }
 
 // Bundler creates NVSentinel application bundles based on recipes.

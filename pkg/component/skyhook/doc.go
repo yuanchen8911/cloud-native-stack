@@ -20,16 +20,17 @@
 //
 // This bundler uses the generic bundler framework from [internal.ComponentConfig]
 // and [internal.MakeBundle]. The componentConfig variable defines:
-//   - Default Helm repository (https://helm.ngc.nvidia.com/nvstaging)
-//   - Default Helm chart (nvstaging/skyhook-operator)
-//   - Custom MetadataFunc for Skyhook-specific fields
+//   - Default Helm repository (https://nvidia.github.io/skyhook)
+//   - Default Helm chart (skyhook)
+//   - CustomManifestFunc for generating customization CR manifests
+//   - MetadataExtensions for additional template data
 //
 // # Custom Metadata
 //
-// This bundler provides custom metadata via MetadataFunc to include:
+// This bundler provides custom metadata via MetadataExtensions to include:
 //   - HelmChartName: Display name for the chart
-//   - HelmReleaseName: Release name for Helm installation
-//   - OperatorRegistry: Container registry for operator images
+//
+// These extensions are accessible in templates via {{ .Script.Extensions.HelmChartName }}.
 //
 // # Usage
 //

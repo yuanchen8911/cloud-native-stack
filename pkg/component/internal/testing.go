@@ -423,3 +423,189 @@ func (h *TestHarness) TestMakeWithRecipeResult(bundler BundlerInterface, recipeR
 
 	h.AssertResult(result, tmpDir)
 }
+
+// BundlerFactory is a function that creates a new bundler instance.
+type BundlerFactory func(*config.Config) BundlerInterface
+
+// StandardBundlerTestConfig holds configuration for running standard bundler tests.
+type StandardBundlerTestConfig struct {
+	// ComponentName is the name of the component (e.g., "cert-manager").
+	ComponentName string
+
+	// NewBundler creates a new bundler instance.
+	NewBundler BundlerFactory
+
+	// GetTemplate is the template getter function.
+	GetTemplate TemplateFunc
+
+	// ExpectedTemplates lists templates that should be available (e.g., ["README.md"]).
+	ExpectedTemplates []string
+
+	// ExpectedFiles lists files that should be generated (e.g., ["values.yaml", "README.md"]).
+	ExpectedFiles []string
+
+	// DefaultOverrides are the default values to use in test recipes.
+	DefaultOverrides map[string]interface{}
+}
+
+// RunStandardBundlerTests runs all standard tests for a bundler.
+// This includes TestNewBundler, TestBundler_Make, and TestGetTemplate.
+// Use this to reduce test boilerplate in bundler packages.
+//
+// Example usage:
+//
+//	func TestBundler(t *testing.T) {
+//	    internal.RunStandardBundlerTests(t, internal.StandardBundlerTestConfig{
+//	        ComponentName:     "cert-manager",
+//	        NewBundler:        func(cfg *config.Config) internal.BundlerInterface { return NewBundler(cfg) },
+//	        GetTemplate:       GetTemplate,
+//	        ExpectedTemplates: []string{"README.md"},
+//	        ExpectedFiles:     []string{"values.yaml", "README.md", "checksums.txt"},
+//	    })
+//	}
+func RunStandardBundlerTests(t *testing.T, cfg StandardBundlerTestConfig) {
+	t.Run("NewBundler", func(t *testing.T) {
+		runNewBundlerTests(t, cfg)
+	})
+
+	t.Run("Make", func(t *testing.T) {
+		runMakeTests(t, cfg)
+	})
+
+	if cfg.GetTemplate != nil && len(cfg.ExpectedTemplates) > 0 {
+		t.Run("GetTemplate", func(t *testing.T) {
+			TestTemplateGetter(t, cfg.GetTemplate, cfg.ExpectedTemplates)
+		})
+	}
+}
+
+// runNewBundlerTests tests bundler creation.
+func runNewBundlerTests(t *testing.T, cfg StandardBundlerTestConfig) {
+	tests := []struct {
+		name string
+		cfg  *config.Config
+	}{
+		{
+			name: "with nil config",
+			cfg:  nil,
+		},
+		{
+			name: "with valid config",
+			cfg:  config.NewConfig(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := cfg.NewBundler(tt.cfg)
+			if b == nil {
+				t.Fatal("NewBundler() returned nil")
+			}
+		})
+	}
+}
+
+// runMakeTests tests the Make method with various inputs.
+func runMakeTests(t *testing.T, cfg StandardBundlerTestConfig) {
+	tests := []struct {
+		name       string
+		recipe     *recipe.RecipeResult
+		wantErr    bool
+		verifyFunc func(t *testing.T, outputDir string)
+	}{
+		{
+			name:    "valid recipe with component",
+			recipe:  createStandardTestRecipeResult(cfg.ComponentName, cfg.DefaultOverrides),
+			wantErr: false,
+			verifyFunc: func(t *testing.T, outputDir string) {
+				bundleDir := filepath.Join(outputDir, cfg.ComponentName)
+				for _, file := range cfg.ExpectedFiles {
+					path := filepath.Join(bundleDir, file)
+					if _, err := os.Stat(path); os.IsNotExist(err) {
+						t.Errorf("Expected file %s not found", file)
+					}
+				}
+			},
+		},
+		{
+			name:    "missing component",
+			recipe:  createRecipeResultWithoutComponent(cfg.ComponentName),
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			b := cfg.NewBundler(nil)
+			ctx := context.Background()
+
+			result, err := b.Make(ctx, tt.recipe, tmpDir)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Make() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if !tt.wantErr {
+				if result == nil {
+					t.Error("Make() returned nil result")
+					return
+				}
+				if len(result.Files) == 0 {
+					t.Error("Make() returned no files")
+				}
+
+				if tt.verifyFunc != nil {
+					tt.verifyFunc(t, tmpDir)
+				}
+			}
+		})
+	}
+}
+
+// createStandardTestRecipeResult creates a test RecipeResult with the given component.
+func createStandardTestRecipeResult(componentName string, overrides map[string]interface{}) *recipe.RecipeResult {
+	if overrides == nil {
+		overrides = map[string]interface{}{
+			"operator": map[string]interface{}{
+				"version": "v25.3.4",
+			},
+		}
+	}
+
+	return &recipe.RecipeResult{
+		Kind:       "recipeResult",
+		APIVersion: recipe.FullAPIVersion,
+		ComponentRefs: []recipe.ComponentRef{
+			{
+				Name:      componentName,
+				Type:      "Helm",
+				Source:    "https://helm.ngc.nvidia.com/nvidia",
+				Version:   "v25.3.4",
+				Overrides: overrides,
+			},
+		},
+	}
+}
+
+// createRecipeResultWithoutComponent creates a RecipeResult without the specified component.
+func createRecipeResultWithoutComponent(componentName string) *recipe.RecipeResult {
+	// Use a different component name to simulate missing component
+	otherName := "other-component"
+	if componentName == otherName {
+		otherName = "different-component"
+	}
+
+	return &recipe.RecipeResult{
+		Kind:       "recipeResult",
+		APIVersion: recipe.FullAPIVersion,
+		ComponentRefs: []recipe.ComponentRef{
+			{
+				Name:    otherName,
+				Type:    "Helm",
+				Version: "v1.0.0",
+			},
+		},
+	}
+}

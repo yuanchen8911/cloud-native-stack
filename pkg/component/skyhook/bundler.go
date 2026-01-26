@@ -2,6 +2,7 @@ package skyhook
 
 import (
 	"context"
+	_ "embed"
 	"log/slog"
 	"path/filepath"
 
@@ -18,11 +19,48 @@ const (
 	Name = "skyhook-operator"
 )
 
+var (
+	//go:embed templates/README.md.tmpl
+	readmeTemplate string
+
+	//go:embed templates/customizations/ubuntu.yaml.tmpl
+	ubuntuCustomizationTemplate string
+
+	// customizationTemplates maps customization names to their template content.
+	customizationTemplates = map[string]string{
+		"ubuntu": ubuntuCustomizationTemplate,
+	}
+)
+
 func init() {
 	// Register Skyhook bundler factory in global registry
 	registry.MustRegister(types.BundleTypeSkyhook, func(cfg *config.Config) registry.Bundler {
 		return NewBundler(cfg)
 	})
+}
+
+// GetTemplate returns the named template content for README generation.
+func GetTemplate(name string) (string, bool) {
+	templates := map[string]string{
+		"README.md": readmeTemplate,
+	}
+	tmpl, ok := templates[name]
+	return tmpl, ok
+}
+
+// GetCustomizationTemplate returns the template for a specific customization.
+func GetCustomizationTemplate(name string) (string, bool) {
+	tmpl, ok := customizationTemplates[name]
+	return tmpl, ok
+}
+
+// ListCustomizations returns all available customization names.
+func ListCustomizations() []string {
+	names := make([]string, 0, len(customizationTemplates))
+	for name := range customizationTemplates {
+		names = append(names, name)
+	}
+	return names
 }
 
 // componentConfig defines the Skyhook Operator bundler configuration.
@@ -36,12 +74,12 @@ var componentConfig = common.ComponentConfig{
 	AcceleratedTolerationPaths: []string{
 		"controllerManager.tolerations",
 	},
-	DefaultHelmRepository: "https://helm.ngc.nvidia.com/nvidia",
-	DefaultHelmChart:      "nvidia/skyhook-operator",
+	DefaultHelmRepository: "https://nvidia.github.io/skyhook",
+	DefaultHelmChart:      "skyhook",
 	TemplateGetter:        GetTemplate,
 	CustomManifestFunc:    generateCustomManifests,
-	MetadataFunc: func(configMap map[string]string) interface{} {
-		return GenerateBundleMetadata(configMap)
+	MetadataExtensions: map[string]interface{}{
+		"HelmChartName": "skyhook",
 	},
 }
 
@@ -85,7 +123,7 @@ func generateCustomManifests(ctx context.Context, b *common.BaseBundler, values 
 	}
 
 	// Generate bundle metadata for manifest templates
-	metadata := GenerateBundleMetadata(configMap)
+	metadata := common.GenerateDefaultBundleMetadata(configMap, Name, "https://nvidia.github.io/skyhook", "skyhook")
 	manifestData := map[string]interface{}{
 		"Values": values,
 		"Script": metadata,

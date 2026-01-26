@@ -866,366 +866,320 @@ The e2e script:
 
 ### Adding a New Bundler
 
-The bundler framework uses a **simplified RecipeResult-only architecture**. Bundlers receive RecipeResult with component references and generate deployment artifacts.
+The bundler framework uses a **ComponentConfig-based architecture** with shared utilities in `pkg/component/internal`. Bundlers define their configuration declaratively and delegate common logic to `MakeBundle()`.
 
 #### Quick Start: Minimal Bundler Implementation
 
 1. Create bundler package in `pkg/component/<bundler-name>/`:
 ```go
-// pkg/component/networkoperator/bundler.go
-package networkoperator
+// pkg/component/mybundler/bundler.go
+package mybundler
 
 import (
     "context"
-    "embed"
-    "fmt"
-    "os"
-    "path/filepath"
-    
-    "github.com/NVIDIA/cloud-native-stack/pkg/bundler"
+    _ "embed"
+
+    "github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
+    "github.com/NVIDIA/cloud-native-stack/pkg/bundler/registry"
     "github.com/NVIDIA/cloud-native-stack/pkg/bundler/result"
+    "github.com/NVIDIA/cloud-native-stack/pkg/bundler/types"
+    "github.com/NVIDIA/cloud-native-stack/pkg/component/internal"
+    "github.com/NVIDIA/cloud-native-stack/pkg/recipe"
 )
 
-//go:embed templates/*.tmpl
-var templatesFS embed.FS
-
 const (
-    bundlerType = bundler.BundleType("network-operator")
-    Name        = "network-operator"  // Use constant for component name
+    Name = "my-bundler"  // Component name matching recipe componentRefs
+)
+
+var (
+    //go:embed templates/README.md.tmpl
+    readmeTemplate string
+
+    // GetTemplate returns template content for README generation.
+    // Use StandardTemplates for the common case of just a README template.
+    GetTemplate = internal.StandardTemplates(readmeTemplate)
 )
 
 func init() {
-    // Self-register using MustRegister (panics on duplicates)
-    bundler.MustRegister(bundlerType, NewBundler())
+    // Self-register bundler factory in global registry
+    registry.MustRegister(types.BundleTypeMyBundler, func(cfg *config.Config) registry.Bundler {
+        return NewBundler(cfg)
+    })
 }
 
-// Bundler generates Network Operator deployment bundles from RecipeResult.
+// componentConfig defines all component-specific settings declaratively.
+var componentConfig = internal.ComponentConfig{
+    Name:                  Name,
+    DisplayName:           "my-bundler",
+    ValueOverrideKeys:     []string{"mybundler"},  // CLI --set prefix
+    DefaultHelmRepository: "https://charts.example.com",
+    DefaultHelmChart:      "example/my-bundler",
+    TemplateGetter:        GetTemplate,
+}
+
+// Bundler generates deployment bundles from recipes.
 type Bundler struct {
-    *bundler.BaseBundler  // Embed helper for common functionality
+    *internal.BaseBundler
 }
 
-// NewBundler creates a new Network Operator bundler instance.
-func NewBundler() *Bundler {
+// NewBundler creates a new bundler instance.
+func NewBundler(cfg *config.Config) *Bundler {
     return &Bundler{
-        BaseBundler: bundler.NewBaseBundler(bundlerType, templatesFS),
+        BaseBundler: internal.NewBaseBundler(cfg, types.BundleTypeMyBundler),
     }
 }
 
-// Make generates the bundle (delegates to makeFromRecipeResult).
-func (b *Bundler) Make(ctx context.Context, input *result.RecipeResult, 
-    outputDir string) (*bundler.Result, error) {
-    return b.makeFromRecipeResult(ctx, input, outputDir)
-}
-
-// makeFromRecipeResult generates bundle from RecipeResult with component references.
-func (b *Bundler) makeFromRecipeResult(ctx context.Context, input *result.RecipeResult, 
-    outputDir string) (*bundler.Result, error) {
-    
-    // 1. Get component reference from RecipeResult
-    component := input.GetComponentRef(Name)
-    if component == nil {
-        return nil, fmt.Errorf(Name + " component not found in recipe result")
-    }
-    
-    // 2. Get values map (with overrides already applied)
-    values := input.GetValuesForComponent(Name)
-    
-    // 3. Create bundle directory structure
-    if err := b.CreateBundleDir(outputDir); err != nil {
-        return nil, err
-    }
-    
-    // 4. Generate bundle metadata
-    metadata := generateBundleMetadata(component, values)
-    
-    // 5. Combine values and metadata for README
-    // The "Script" key is preserved for template compatibility
-    readmeData := map[string]interface{}{
-        "Values": values,
-        "Script": metadata, // "Script" key preserved for template compatibility
-    }
-    
-    // 6. Generate files from templates
-    files := []struct {
-        path     string
-        template string
-        data     interface{}
-        perm     os.FileMode
-    }{
-        {filepath.Join(outputDir, "values.yaml"), "values.yaml", values, 0644},
-        {filepath.Join(outputDir, "README.md"), "README.md", readmeData, 0644},
-    }
-    
-    var generatedFiles []string
-    for _, f := range files {
-        if err := b.GenerateFileFromTemplate(ctx, GetTemplate, f.template, 
-            f.path, f.data, f.perm); err != nil {
-            return nil, err
-        }
-        generatedFiles = append(generatedFiles, f.path)
-    }
-    
-    // 7. Generate checksums and return result
-    return b.GenerateResult(outputDir, generatedFiles)
+// Make generates the bundle by delegating to MakeBundle.
+func (b *Bundler) Make(ctx context.Context, input recipe.RecipeInput, outputDir string) (*result.Result, error) {
+    return internal.MakeBundle(ctx, b.BaseBundler, input, outputDir, componentConfig)
 }
 ```
 
-2. Create bundle metadata generator in `scripts.go`:
+2. Create templates directory:
+```
+pkg/component/mybundler/
+├── bundler.go           # All bundler logic (shown above)
+├── bundler_test.go      # Tests using RunStandardBundlerTests
+├── doc.go               # Package documentation
+└── templates/
+    └── README.md.tmpl   # README template
+```
+
+**Example template (`templates/README.md.tmpl`):**
+```markdown
+# {{ .Script.DisplayName }} Deployment
+
+Bundler Version: {{ .Script.Version }}
+Recipe Version: {{ .Script.RecipeVersion }}
+
+## Prerequisites
+
+- Kubernetes 1.25+ cluster
+- Helm 3.x installed
+- kubectl configured
+
+## Installation
+
+```bash
+helm repo add myrepo {{ .Script.HelmRepository }}
+helm install {{ .Script.HelmReleaseName }} myrepo/{{ .Script.HelmChart }} \
+  --namespace {{ .Script.Namespace }} \
+  --create-namespace \
+  -f values.yaml
+```
+
+## Verification
+
+```bash
+kubectl get pods -n {{ .Script.Namespace }}
+```
+```
+
+**Note:** Templates receive a map with `Values` (Helm values) and `Script` (BundleMetadata).
+
+3. Add tests using the shared test harness:
 ```go
-// pkg/component/networkoperator/scripts.go
-package networkoperator
-
-import (
-    "github.com/NVIDIA/cloud-native-stack/pkg/bundler/result"
-)
-
-// BundleMetadata contains metadata for README and manifests.
-// Note: Named "scripts.go" for historical reasons but no longer generates shell scripts.
-type BundleMetadata struct {
-    Namespace     string
-    Version       string
-    Repository    string
-    ComponentName string
-}
-
-// generateBundleMetadata creates metadata from component reference.
-func generateBundleMetadata(component *result.ComponentRef, values map[string]interface{}) *BundleMetadata {
-    namespace := "default"
-    if ns, ok := values["namespace"].(string); ok {
-        namespace = ns
-    }
-    
-    repository := "https://helm.ngc.nvidia.com/nvidia"
-    if repo, ok := values["repository"].(string); ok {
-        repository = repo
-    }
-    
-    return &BundleMetadata{
-        Namespace:     namespace,
-        Version:       component.Version,
-        Repository:    repository,
-        ComponentName: component.Name,
-    }
-}
-```
-
-3. Create templates directory with embedded templates:
-```
-pkg/component/networkoperator/templates/
-├── values.yaml.tmpl               # Helm chart values
-└── README.md.tmpl                 # Documentation
-```
-
-**Example template (`values.yaml.tmpl`):**
-```yaml
-# Network Operator Helm Values
-# Generated by Cloud Native Stack
-
-# Direct access to values map
-version: {{ index . "version" }}
-namespace: {{ index . "namespace" }}
-  
-driver:
-  image: {{ index . "driver.image" }}
-  version: {{ index . "driver.version" }}
-  
-config:
-  rdma:
-    enabled: {{ index . "rdma.enabled" }}
-  sriov:
-    enabled: {{ index . "sriov.enabled" }}
-```
-
-**Note:** Templates use `index` function to access values map.
-
-4. Write tests with TestHarness and RecipeResult:
-```go
-// pkg/component/networkoperator/bundler_test.go
-package networkoperator
+// pkg/component/mybundler/bundler_test.go
+package mybundler
 
 import (
     "testing"
-    
-    "github.com/NVIDIA/cloud-native-stack/pkg/bundler/result"
+
+    "github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
     "github.com/NVIDIA/cloud-native-stack/pkg/component/internal"
 )
 
 func TestBundler_Make(t *testing.T) {
-    // Use TestHarness for consistent testing
-    harness := internal.NewTestHarness(t, NewBundler())
-    
-    tests := []struct {
-        name    string
-        input   *result.RecipeResult
-        wantErr bool
-        verify  func(t *testing.T, outputDir string)
-    }{
-        {
-            name:    "valid component reference",
-            input:   createTestRecipeResult(),
-            wantErr: false,
-            verify: func(t *testing.T, outputDir string) {
-                // TestHarness automatically verifies:
-                // - All expected files exist
-                // - Checksums are valid
-                // - Directory structure is correct
-                
-                // Additional custom verification
-                harness.AssertFileContains(outputDir, "values.yaml", 
-                    "version:", "namespace:")
-            },
-        },
-        {
-            name:    "missing component reference",
-            input:   &result.RecipeResult{},
-            wantErr: true,
-        },
-    }
-    
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            result := harness.RunTest(tt.input, tt.wantErr)
-            if !tt.wantErr && tt.verify != nil {
-                tt.verify(t, result.OutputDir)
-            }
-        })
-    }
+    // RunStandardBundlerTests provides consistent testing across all bundlers
+    internal.RunStandardBundlerTests(t, Name, func(cfg *config.Config) internal.BundlerInterface {
+        return NewBundler(cfg)
+    })
 }
+```
 
-func createTestRecipeResult() *result.RecipeResult {
-    return &result.RecipeResult{
-        Components: map[string]*result.ComponentRef{
-            Name: {
-                Name:    Name,
-                Version: "v25.4.0",
-                Type:    "helm",
-                Source:  "recipe",
-                Values: map[string]interface{}{
-                    "version":        "v25.4.0",
-                    "namespace":      "network-operator",
-                    "driver.image":   "nvcr.io/nvidia/mellanox/mofed",
-                    "driver.version": "24.07",
-                    "rdma.enabled":   true,
-                    "sriov.enabled":  false,
-                },
-            },
-        },
-    }
-}
+4. Create package documentation:
+```go
+// pkg/component/mybundler/doc.go
+
+// Package mybundler implements bundle generation for My Bundler.
+//
+// # Bundle Structure
+//
+// Generated bundles include:
+//   - values.yaml: Helm chart configuration
+//   - README.md: Deployment documentation
+//   - checksums.txt: SHA256 checksums for verification
+//
+// # Implementation
+//
+// This bundler uses the generic bundler framework from [internal.ComponentConfig]
+// and [internal.MakeBundle].
+package mybundler
 ```
 
 5. Test bundle generation:
 ```bash
-# Build CLI with new bundler
-make build
+# Run tests
+go test ./pkg/component/mybundler/...
 
-# Test bundle generation (automatic registration via init())
+# Build CLI and test bundle generation
+make build
 ./dist/cns_*/cnsctl bundle \
-  --recipe examples/recipes/gb200-eks-ubuntu-training.yaml \
-  --bundlers network-operator \
+  --recipe examples/recipes/example.yaml \
+  --bundlers my-bundler \
   --output ./test-bundles
 
 # Verify bundle structure
-tree test-bundles/network-operator/
+tree test-bundles/my-bundler/
 ```
 
 **Expected output:**
 ```
-test-bundles/network-operator/
+test-bundles/my-bundler/
 ├── values.yaml
-├── scripts/
-│   ├── install.sh
-│   └── uninstall.sh
 ├── README.md
 └── checksums.txt
 ```
 
+#### ComponentConfig Options
 
-#### Key Components
+The `ComponentConfig` struct supports these fields:
 
-**RecipeResult-Only Architecture:**
-- Single makeFromRecipeResult() path
-- Get component via `input.GetComponentRef(Name)` 
-- Extract values via `input.GetValuesForComponent(Name)`
-- Values map already has CLI --set overrides applied
-- No measurement extraction needed
+```go
+var componentConfig = internal.ComponentConfig{
+    // Required fields
+    Name:                  "my-bundler",           // Component name (matches recipe)
+    DisplayName:           "My Bundler",           // Human-readable name for headers
+    ValueOverrideKeys:     []string{"mybundler"},  // CLI --set prefix keys
+    DefaultHelmRepository: "https://charts.example.com",
+    DefaultHelmChart:      "example/my-bundler",
+    TemplateGetter:        GetTemplate,            // Template access function
 
-**BundleMetadata for Metadata:**
-- Contains namespace, version, repository info
-- Separate from values map
-- Used for README templates and manifest generation
-- Named "scripts.go" for historical reasons but no longer generates scripts
+    // Optional: Default chart version (used when recipe doesn't specify)
+    DefaultHelmChartVersion: "v1.0.0",
 
-**Template Data:**
-- values.yaml: receives values map directly
-- README.md: receives combined map with Values + Script (metadata)
-- The "Script" key is preserved for template compatibility
+    // Optional: Node scheduling paths (for --system-node-selector, etc. flags)
+    SystemNodeSelectorPaths:      []string{"operator.nodeSelector"},
+    SystemTolerationPaths:        []string{"operator.tolerations"},
+    AcceleratedNodeSelectorPaths: []string{"daemonsets.nodeSelector"},
+    AcceleratedTolerationPaths:   []string{"daemonsets.tolerations"},
 
-**File Structure per Component:**
-- bundler.go: Main bundler logic with makeFromRecipeResult()
-- scripts.go: BundleMetadata generation
-- bundler_test.go: Tests using RecipeResult
-- templates/*.tmpl: Embedded templates
+    // Optional: Custom metadata for README templates
+    MetadataExtensions: map[string]interface{}{
+        "InstallCRDs": true,
+        "CustomField": "value",
+    },
 
-#### Bundler Architecture Benefits
+    // Optional: Custom manifest generation
+    CustomManifestFunc: func(ctx context.Context, b *internal.BaseBundler,
+        values map[string]interface{}, configMap map[string]string, dir string) ([]string, error) {
+        // Generate additional K8s manifests
+        return []string{"manifests/custom.yaml"}, nil
+    },
+}
+```
 
-**Simplified Architecture:**
-- 54% average code reduction across all bundlers
-- Single code path (no dual Recipe/RecipeResult routing)
-- Direct values access (no measurement extraction)
-- Simpler testing with RecipeResult pattern
+#### Adding Custom Metadata
 
-**BaseBundler Helper:**
-- Common functionality: directory creation, file writing, template rendering, checksum generation
-- Consistent error handling and logging
-- Automatic context cancellation support
+For components that need additional template data, use `MetadataExtensions`:
 
-**TestHarness:**
-- 34% less test code
-- Consistent test structure across all bundlers
-- Automatic file existence and checksum verification
-- Helper assertions for common test patterns
+```go
+var componentConfig = internal.ComponentConfig{
+    // ... other fields ...
+    MetadataExtensions: map[string]interface{}{
+        "InstallCRDs": true,
+        "CustomField": "custom-value",
+    },
+}
+```
 
-**Registry Pattern:**
-- Thread-safe bundler registration
-- Self-registration via init() functions
-- Automatic discovery (no manual registration needed)
-- `MustRegister()` panics on duplicate types (fail fast)
+Access in templates via:
+```
+{{ .Script.Extensions.InstallCRDs }}
+{{ .Script.Extensions.CustomField }}
+```
+
+#### Adding Custom Manifests
+
+For components that generate additional Kubernetes manifests:
+
+```go
+var componentConfig = internal.ComponentConfig{
+    // ... other fields ...
+    CustomManifestFunc: func(ctx context.Context, b *internal.BaseBundler,
+        values map[string]interface{}, configMap map[string]string, dir string) ([]string, error) {
+
+        manifestPath := filepath.Join(dir, "manifests", "custom.yaml")
+        if err := b.GenerateFileFromTemplate(ctx, GetTemplate, "custom-manifest",
+            manifestPath, values, 0644); err != nil {
+            return nil, err
+        }
+        return []string{manifestPath}, nil
+    },
+}
+```
+
+#### File Structure Summary
+
+Each bundler package contains just 3-4 files:
+
+```
+pkg/component/mybundler/
+├── bundler.go           # ComponentConfig + Bundler + embedded templates
+├── bundler_test.go      # Tests using RunStandardBundlerTests
+├── doc.go               # Package documentation
+└── templates/
+    └── README.md.tmpl   # README template (and any custom manifest templates)
+```
+
+#### Key Framework Features
+
+**MakeBundle handles all common logic:**
+- Extracting component values from recipe input
+- Applying CLI --set value overrides
+- Applying node selectors and tolerations to configured Helm paths
+- Creating directory structure
+- Writing values.yaml with proper headers
+- Calling CustomManifestFunc if defined
+- Generating README from templates
+- Computing SHA256 checksums
+
+**StandardTemplates helper:**
+- For bundlers with just a README template, use `internal.StandardTemplates(readmeTemplate)`
+- Returns a template getter function compatible with ComponentConfig
+
+**RunStandardBundlerTests:**
+- Provides consistent test coverage for all bundlers
+- Tests both success and error cases
+- Verifies file existence and checksums
+- Reduces test boilerplate significantly
+
+**BundleMetadata in templates:**
+- Access via `{{ .Script.Namespace }}`, `{{ .Script.Version }}`, etc.
+- Extensions via `{{ .Script.Extensions.FieldName }}`
+- Values via `{{ .Values }}` or `{{ index .Values "key" }}`
 
 #### Bundler Best Practices
 
 **Implementation:**
-- ✅ Use `Name` constant instead of hardcoded component names
-- ✅ Single `makeFromRecipeResult()` method - no dual paths
-- ✅ Get values via `input.GetValuesForComponent(Name)`
-- ✅ Pass values map directly to templates
-- ✅ Use `BundleMetadata` for metadata (namespace, version, helm info)
+- ✅ Use `Name` constant for component name
+- ✅ Use `internal.StandardTemplates()` for simple README-only bundlers
+- ✅ Use `MetadataExtensions` for custom template data (not MetadataFunc)
 - ✅ Use `go:embed` for template portability
-- ✅ Keep bundlers stateless (thread-safe by default)
-- ✅ Check context cancellation for long operations
-- ✅ Use `MustRegister()` for fail-fast on registration errors
+- ✅ Self-register in `init()` using `registry.MustRegister()`
 
 **Testing:**
-- ✅ Use `TestHarness` for consistent test structure
-- ✅ Create RecipeResult with ComponentRef in tests
-- ✅ Test with realistic values maps
-- ✅ Verify file content with `AssertFileContains()`
-- ✅ Test error cases (missing component reference)
-- ✅ Validate checksums are generated correctly
+- ✅ Use `internal.RunStandardBundlerTests()` for consistent testing
+- ✅ Add custom tests only for component-specific behavior
 
 **Templates:**
-- ✅ Access values map with `index` function: `{{ index . "key" }}`
-- ✅ For README, use nested access: `{{ index .Values "key" }}`
-- ✅ Use clear template variable names
-- ✅ Add comments explaining data types
+- ✅ Access metadata via `{{ .Script.FieldName }}`
+- ✅ Access extensions via `{{ .Script.Extensions.CustomField }}`
 - ✅ Handle missing values gracefully with `{{- if }}`
-- ✅ Validate template rendering in tests
 
 **Documentation:**
-- ✅ Add package doc.go with overview
-- ✅ Document exported types and functions
-- ✅ Include examples in README.md template
-- ✅ Explain prerequisites and deployment steps
+- ✅ Add doc.go with package overview
+- ✅ Document bundle structure and custom metadata fields
 
 
 ## Code Quality Standards

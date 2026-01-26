@@ -705,6 +705,356 @@ func TestTolerationsToPodSpec(t *testing.T) {
 	}
 }
 
+func TestApplyMapOverrides(t *testing.T) {
+	tests := []struct {
+		name      string
+		target    map[string]interface{}
+		overrides map[string]string
+		wantErr   bool
+		verify    func(t *testing.T, target map[string]interface{})
+	}{
+		{
+			name:   "sets simple value",
+			target: make(map[string]interface{}),
+			overrides: map[string]string{
+				"key": "value",
+			},
+			wantErr: false,
+			verify: func(t *testing.T, target map[string]interface{}) {
+				if target["key"] != "value" {
+					t.Errorf("key = %v, want value", target["key"])
+				}
+			},
+		},
+		{
+			name:   "sets nested value",
+			target: make(map[string]interface{}),
+			overrides: map[string]string{
+				"driver.version": "550.0.0",
+			},
+			wantErr: false,
+			verify: func(t *testing.T, target map[string]interface{}) {
+				driver, ok := target["driver"].(map[string]interface{})
+				if !ok {
+					t.Fatal("driver not found or wrong type")
+				}
+				if driver["version"] != "550.0.0" {
+					t.Errorf("driver.version = %v, want 550.0.0", driver["version"])
+				}
+			},
+		},
+		{
+			name:   "sets deeply nested value",
+			target: make(map[string]interface{}),
+			overrides: map[string]string{
+				"dcgm.exporter.config.enabled": "true",
+			},
+			wantErr: false,
+			verify: func(t *testing.T, target map[string]interface{}) {
+				dcgm := target["dcgm"].(map[string]interface{})
+				exporter := dcgm["exporter"].(map[string]interface{})
+				config := exporter["config"].(map[string]interface{})
+				if config["enabled"] != true {
+					t.Errorf("dcgm.exporter.config.enabled = %v, want true", config["enabled"])
+				}
+			},
+		},
+		{
+			name: "merges with existing map",
+			target: map[string]interface{}{
+				"driver": map[string]interface{}{
+					"enabled": true,
+				},
+			},
+			overrides: map[string]string{
+				"driver.version": "550.0.0",
+			},
+			wantErr: false,
+			verify: func(t *testing.T, target map[string]interface{}) {
+				driver := target["driver"].(map[string]interface{})
+				if driver["enabled"] != true {
+					t.Error("existing enabled field was lost")
+				}
+				if driver["version"] != "550.0.0" {
+					t.Errorf("driver.version = %v, want 550.0.0", driver["version"])
+				}
+			},
+		},
+		{
+			name:      "nil target returns error",
+			target:    nil,
+			overrides: map[string]string{"key": "value"},
+			wantErr:   true,
+		},
+		{
+			name:      "empty overrides is no-op",
+			target:    make(map[string]interface{}),
+			overrides: map[string]string{},
+			wantErr:   false,
+			verify: func(t *testing.T, target map[string]interface{}) {
+				if len(target) != 0 {
+					t.Error("expected empty target")
+				}
+			},
+		},
+		{
+			name: "path segment exists but is not a map",
+			target: map[string]interface{}{
+				"driver": "string-value",
+			},
+			overrides: map[string]string{
+				"driver.version": "550.0.0",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ApplyMapOverrides(tt.target, tt.overrides)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ApplyMapOverrides() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.verify != nil && !tt.wantErr {
+				tt.verify(t, tt.target)
+			}
+		})
+	}
+}
+
+func TestConvertMapValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  interface{}
+	}{
+		{
+			name:  "converts true",
+			input: "true",
+			want:  true,
+		},
+		{
+			name:  "converts false",
+			input: "false",
+			want:  false,
+		},
+		{
+			name:  "converts integer",
+			input: "42",
+			want:  int64(42),
+		},
+		{
+			name:  "converts negative integer",
+			input: "-100",
+			want:  int64(-100),
+		},
+		{
+			name:  "converts float",
+			input: "3.14",
+			want:  3.14,
+		},
+		{
+			name:  "keeps string as string",
+			input: "hello",
+			want:  "hello",
+		},
+		{
+			name:  "version string stays string",
+			input: "v1.2.3",
+			want:  "v1.2.3",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := convertMapValue(tt.input)
+			if got != tt.want {
+				t.Errorf("convertMapValue(%q) = %v (%T), want %v (%T)", tt.input, got, got, tt.want, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseBool(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    bool
+		wantErr bool
+	}{
+		{name: "true", input: "true", want: true},
+		{name: "True", input: "True", want: true},
+		{name: "TRUE", input: "TRUE", want: true},
+		{name: "yes", input: "yes", want: true},
+		{name: "1", input: "1", want: true},
+		{name: "on", input: "on", want: true},
+		{name: "enabled", input: "enabled", want: true},
+		{name: "false", input: "false", want: false},
+		{name: "False", input: "False", want: false},
+		{name: "FALSE", input: "FALSE", want: false},
+		{name: "no", input: "no", want: false},
+		{name: "0", input: "0", want: false},
+		{name: "off", input: "off", want: false},
+		{name: "disabled", input: "disabled", want: false},
+		{name: "invalid", input: "maybe", wantErr: true},
+		{name: "empty", input: "", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseBool(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseBool(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && got != tt.want {
+				t.Errorf("parseBool(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSetFieldValue tests the setFieldValue function with various types
+func TestSetFieldValue(t *testing.T) {
+	type testStruct struct {
+		StringField  string
+		BoolField    bool
+		IntField     int
+		Int64Field   int64
+		UintField    uint
+		FloatField   float64
+		Float32Field float32
+	}
+
+	tests := []struct {
+		name      string
+		fieldName string
+		value     string
+		verify    func(t *testing.T, s *testStruct)
+		wantErr   bool
+	}{
+		{
+			name:      "sets string field",
+			fieldName: "StringField",
+			value:     "test-value",
+			verify: func(t *testing.T, s *testStruct) {
+				if s.StringField != "test-value" {
+					t.Errorf("StringField = %v, want test-value", s.StringField)
+				}
+			},
+		},
+		{
+			name:      "sets bool field true",
+			fieldName: "BoolField",
+			value:     "true",
+			verify: func(t *testing.T, s *testStruct) {
+				if !s.BoolField {
+					t.Error("BoolField should be true")
+				}
+			},
+		},
+		{
+			name:      "sets bool field false",
+			fieldName: "BoolField",
+			value:     "false",
+			verify: func(t *testing.T, s *testStruct) {
+				if s.BoolField {
+					t.Error("BoolField should be false")
+				}
+			},
+		},
+		{
+			name:      "sets int field",
+			fieldName: "IntField",
+			value:     "42",
+			verify: func(t *testing.T, s *testStruct) {
+				if s.IntField != 42 {
+					t.Errorf("IntField = %v, want 42", s.IntField)
+				}
+			},
+		},
+		{
+			name:      "sets int64 field",
+			fieldName: "Int64Field",
+			value:     "9223372036854775807",
+			verify: func(t *testing.T, s *testStruct) {
+				if s.Int64Field != 9223372036854775807 {
+					t.Errorf("Int64Field = %v, want max int64", s.Int64Field)
+				}
+			},
+		},
+		{
+			name:      "sets uint field",
+			fieldName: "UintField",
+			value:     "100",
+			verify: func(t *testing.T, s *testStruct) {
+				if s.UintField != 100 {
+					t.Errorf("UintField = %v, want 100", s.UintField)
+				}
+			},
+		},
+		{
+			name:      "sets float64 field",
+			fieldName: "FloatField",
+			value:     "3.14159",
+			verify: func(t *testing.T, s *testStruct) {
+				if s.FloatField != 3.14159 {
+					t.Errorf("FloatField = %v, want 3.14159", s.FloatField)
+				}
+			},
+		},
+		{
+			name:      "sets float32 field",
+			fieldName: "Float32Field",
+			value:     "2.5",
+			verify: func(t *testing.T, s *testStruct) {
+				if s.Float32Field != 2.5 {
+					t.Errorf("Float32Field = %v, want 2.5", s.Float32Field)
+				}
+			},
+		},
+		{
+			name:      "invalid bool value",
+			fieldName: "BoolField",
+			value:     "not-a-bool",
+			wantErr:   true,
+		},
+		{
+			name:      "invalid int value",
+			fieldName: "IntField",
+			value:     "not-an-int",
+			wantErr:   true,
+		},
+		{
+			name:      "invalid uint value",
+			fieldName: "UintField",
+			value:     "-1",
+			wantErr:   true,
+		},
+		{
+			name:      "invalid float value",
+			fieldName: "FloatField",
+			value:     "not-a-float",
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &testStruct{}
+			err := ApplyValueOverrides(s, map[string]string{tt.fieldName: tt.value})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("setFieldValue() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.verify != nil && !tt.wantErr {
+				tt.verify(t, s)
+			}
+		})
+	}
+}
+
 func TestNodeSelectorToMatchExpressions(t *testing.T) {
 	tests := []struct {
 		name         string

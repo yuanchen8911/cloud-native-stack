@@ -1,0 +1,249 @@
+package internal
+
+import (
+	"testing"
+
+	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
+)
+
+func TestGenerateDefaultBundleMetadata(t *testing.T) {
+	tests := []struct {
+		name             string
+		config           map[string]string
+		componentName    string
+		defaultHelmRepo  string
+		defaultHelmChart string
+		wantNamespace    string
+		wantHelmRepo     string
+		wantHelmChart    string
+		wantVersion      string
+	}{
+		{
+			name:             "with all config values",
+			config:           map[string]string{"namespace": "custom-ns", "helm_repository": "https://custom.repo", "helm_chart_version": "v1.0.0", "bundler_version": "1.2.3", "recipe_version": "2.0.0"},
+			componentName:    "test-component",
+			defaultHelmRepo:  "https://default.repo",
+			defaultHelmChart: "default/chart",
+			wantNamespace:    "custom-ns",
+			wantHelmRepo:     "https://custom.repo",
+			wantHelmChart:    "default/chart",
+			wantVersion:      "1.2.3",
+		},
+		{
+			name:             "with empty config uses defaults",
+			config:           map[string]string{},
+			componentName:    "my-component",
+			defaultHelmRepo:  "https://default.repo",
+			defaultHelmChart: "nvidia/operator",
+			wantNamespace:    "my-component",
+			wantHelmRepo:     "https://default.repo",
+			wantHelmChart:    "nvidia/operator",
+			wantVersion:      "unknown", // GetBundlerVersion returns "unknown" when not set
+		},
+		{
+			name:             "with nil config",
+			config:           nil,
+			componentName:    "test",
+			defaultHelmRepo:  "https://repo.io",
+			defaultHelmChart: "chart",
+			wantNamespace:    "test",
+			wantHelmRepo:     "https://repo.io",
+			wantHelmChart:    "chart",
+			wantVersion:      "unknown", // GetBundlerVersion returns "unknown" when not set
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GenerateDefaultBundleMetadata(tt.config, tt.componentName, tt.defaultHelmRepo, tt.defaultHelmChart)
+
+			if got == nil {
+				t.Fatal("GenerateDefaultBundleMetadata returned nil")
+			}
+			if got.Namespace != tt.wantNamespace {
+				t.Errorf("Namespace = %q, want %q", got.Namespace, tt.wantNamespace)
+			}
+			if got.HelmRepository != tt.wantHelmRepo {
+				t.Errorf("HelmRepository = %q, want %q", got.HelmRepository, tt.wantHelmRepo)
+			}
+			if got.HelmChart != tt.wantHelmChart {
+				t.Errorf("HelmChart = %q, want %q", got.HelmChart, tt.wantHelmChart)
+			}
+			if got.HelmReleaseName != tt.componentName {
+				t.Errorf("HelmReleaseName = %q, want %q", got.HelmReleaseName, tt.componentName)
+			}
+			if got.Version != tt.wantVersion {
+				t.Errorf("Version = %q, want %q", got.Version, tt.wantVersion)
+			}
+			if got.Extensions == nil {
+				t.Error("Extensions map should not be nil")
+			}
+		})
+	}
+}
+
+func TestGenerateBundleMetadataWithExtensions(t *testing.T) {
+	tests := []struct {
+		name                 string
+		config               map[string]string
+		componentConfig      ComponentConfig
+		wantHelmChartVersion string
+		wantExtensionCount   int
+		wantExtensionKey     string
+		wantExtensionValue   interface{}
+	}{
+		{
+			name:   "with extensions and default version",
+			config: map[string]string{},
+			componentConfig: ComponentConfig{
+				Name:                    "test-component",
+				DefaultHelmRepository:   "https://repo.io",
+				DefaultHelmChart:        "chart",
+				DefaultHelmChartVersion: "v1.2.3",
+				MetadataExtensions: map[string]interface{}{
+					"CustomField": "custom-value",
+					"Enabled":     true,
+				},
+			},
+			wantHelmChartVersion: "v1.2.3",
+			wantExtensionCount:   2,
+			wantExtensionKey:     "CustomField",
+			wantExtensionValue:   "custom-value",
+		},
+		{
+			name:   "config version overrides default",
+			config: map[string]string{"helm_chart_version": "v2.0.0"},
+			componentConfig: ComponentConfig{
+				Name:                    "test",
+				DefaultHelmRepository:   "https://repo.io",
+				DefaultHelmChart:        "chart",
+				DefaultHelmChartVersion: "v1.0.0",
+			},
+			wantHelmChartVersion: "v2.0.0",
+			wantExtensionCount:   0,
+		},
+		{
+			name:   "no extensions",
+			config: map[string]string{},
+			componentConfig: ComponentConfig{
+				Name:                  "test",
+				DefaultHelmRepository: "https://repo.io",
+				DefaultHelmChart:      "chart",
+			},
+			wantHelmChartVersion: "",
+			wantExtensionCount:   0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GenerateBundleMetadataWithExtensions(tt.config, tt.componentConfig)
+
+			if got == nil {
+				t.Fatal("GenerateBundleMetadataWithExtensions returned nil")
+			}
+			if got.HelmChartVersion != tt.wantHelmChartVersion {
+				t.Errorf("HelmChartVersion = %q, want %q", got.HelmChartVersion, tt.wantHelmChartVersion)
+			}
+			if len(got.Extensions) != tt.wantExtensionCount {
+				t.Errorf("Extensions count = %d, want %d", len(got.Extensions), tt.wantExtensionCount)
+			}
+			if tt.wantExtensionKey != "" {
+				if val, ok := got.Extensions[tt.wantExtensionKey]; !ok {
+					t.Errorf("Extension %q not found", tt.wantExtensionKey)
+				} else if val != tt.wantExtensionValue {
+					t.Errorf("Extension[%q] = %v, want %v", tt.wantExtensionKey, val, tt.wantExtensionValue)
+				}
+			}
+		})
+	}
+}
+
+func TestGetValueOverridesForComponent(t *testing.T) {
+	tests := []struct {
+		name            string
+		configOverrides map[string]map[string]string
+		componentConfig ComponentConfig
+		wantOverrides   map[string]string
+	}{
+		{
+			name: "finds by component name",
+			configOverrides: map[string]map[string]string{
+				"gpu-operator": {"driver.version": "550.0.0"},
+			},
+			componentConfig: ComponentConfig{
+				Name:              "gpu-operator",
+				ValueOverrideKeys: []string{"gpuoperator"},
+			},
+			wantOverrides: map[string]string{"driver.version": "550.0.0"},
+		},
+		{
+			name: "finds by alternative key",
+			configOverrides: map[string]map[string]string{
+				"gpuoperator": {"mig.strategy": "mixed"},
+			},
+			componentConfig: ComponentConfig{
+				Name:              "gpu-operator",
+				ValueOverrideKeys: []string{"gpuoperator", "gpu"},
+			},
+			wantOverrides: map[string]string{"mig.strategy": "mixed"},
+		},
+		{
+			name: "component name takes priority over alternative keys",
+			configOverrides: map[string]map[string]string{
+				"gpu-operator": {"version": "1.0.0"},
+				"gpuoperator":  {"version": "2.0.0"},
+			},
+			componentConfig: ComponentConfig{
+				Name:              "gpu-operator",
+				ValueOverrideKeys: []string{"gpuoperator"},
+			},
+			wantOverrides: map[string]string{"version": "1.0.0"},
+		},
+		{
+			name:            "nil overrides returns nil",
+			configOverrides: nil,
+			componentConfig: ComponentConfig{
+				Name: "test",
+			},
+			wantOverrides: nil,
+		},
+		{
+			name: "no matching key returns nil",
+			configOverrides: map[string]map[string]string{
+				"other-component": {"key": "value"},
+			},
+			componentConfig: ComponentConfig{
+				Name:              "test-component",
+				ValueOverrideKeys: []string{"test"},
+			},
+			wantOverrides: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := config.NewConfig(config.WithValueOverrides(tt.configOverrides))
+
+			b := NewBaseBundler(cfg, "test")
+			got := getValueOverridesForComponent(b, tt.componentConfig)
+
+			if tt.wantOverrides == nil {
+				if got != nil {
+					t.Errorf("got %v, want nil", got)
+				}
+				return
+			}
+
+			if got == nil {
+				t.Fatal("got nil, want non-nil")
+			}
+
+			for k, v := range tt.wantOverrides {
+				if got[k] != v {
+					t.Errorf("got[%q] = %q, want %q", k, got[k], v)
+				}
+			}
+		})
+	}
+}
