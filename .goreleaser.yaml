@@ -113,6 +113,33 @@ archives:
       - binary
     name_template: "{{ .Binary }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
+  - id: cnsctl-homebrew
+    ids:
+      - cnsctl
+    formats:
+      - tar.gz
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE*
+      - README*
+
+brews:
+  - name: cnsctl
+    ids:
+      - cnsctl-homebrew
+    repository:
+      owner: mchmarny
+      name: cloud-native-stack
+      branch: main
+    directory: Formula
+    homepage: "https://github.com/mchmarny/cloud-native-stack"
+    description: "CLI for generating validated GPU-accelerated Kubernetes configurations"
+    license: "Apache-2.0"
+    install: |
+      bin.install "cnsctl"
+    test: |
+      system "#{bin}/cnsctl", "version"
+
 changelog:
   sort: asc
   use: github
