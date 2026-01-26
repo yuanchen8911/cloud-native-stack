@@ -4,9 +4,17 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
 
 permissions:
   contents: read
@@ -14,20 +22,24 @@ permissions:
   pull-requests: write
   security-events: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
 
   test:
     name: Test Code
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       GO_VERSION: '1.25'
-      LINTER_VERSION: '1.53.3'
       GOLANGCI_LINT_VERSION: v2.6
       SCAN_SEVERITY: 'MEDIUM'
     steps:
 
       - name: Checkout Code
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
 
       # Setup, Test, and Lint
       - name: Run Go CI (setup, test, lint)

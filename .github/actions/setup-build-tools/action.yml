@@ -32,7 +32,7 @@ runs:
 
     - name: Install Syft
       if: inputs.install_syft == 'true'
-      uses: anchore/sbom-action/download-syft@43a17d6e7add2b5535efe4dcae9952337c479a93  # v0.20.11
+      uses: anchore/sbom-action/download-syft@62ad5284b8ced813296287a0b63906cb364b73ee  # v0.22.0
 
     - name: Install crane
       if: inputs.install_crane == 'true'

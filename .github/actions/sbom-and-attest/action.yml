@@ -38,7 +38,7 @@ runs:
         echo "safe=$SAFE" >> "$GITHUB_OUTPUT"
 
     - name: Generate SBOM
-      uses: anchore/sbom-action@8e94d75ddd33f69f691467e42275782e4bfefe84  # v0.20.9
+      uses: anchore/sbom-action@62ad5284b8ced813296287a0b63906cb364b73ee  # v0.22.0
       with:
         image: "${{ inputs.image_name }}@${{ inputs.image_digest }}"
         format: spdx-json
@@ -72,7 +72,7 @@ runs:
           "${{ inputs.image_name }}@${{ inputs.image_digest }}"
 
     - name: Attest build provenance
-      uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a  # v3.0.0
+      uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f  # v3.2.0
       with:
         subject-name: ${{ inputs.image_name }}
         subject-digest: ${{ inputs.image_digest }}

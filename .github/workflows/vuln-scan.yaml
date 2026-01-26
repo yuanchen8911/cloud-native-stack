@@ -6,7 +6,7 @@ on:
   workflow_dispatch: {}  # allow manual runs for testing
   pull_request:  # add itself for testing changes to this workflow
     paths:
-      - '.github/workflows/vuln-scan.yml'
+      - '.github/workflows/vuln-scan.yaml'
 
 permissions:
   contents: read
@@ -55,6 +55,6 @@ jobs:
 
       - name: Upload Report
         if: steps.check_sarif.outputs.exists == 'true'
-        uses: github/codeql-action/upload-sarif@17783bfb99b07f70fae080b654aed0c514057477  # v2.23.3
+        uses: github/codeql-action/upload-sarif@b20883b0cd1f46c72ae0ba6d1090936928f9fa30  # v4.32.0
         with:
           sarif_file: ${{ env.SARIF_OUTPUT }}
