@@ -1,368 +1,116 @@
-# Mac 
+# =============================================================================
+# OS
+# =============================================================================
 .DS_Store
+Thumbs.db
 
-# Go workspace file
+# =============================================================================
+# Go
+# =============================================================================
+# Workspace
 go.work
 go.work.sum
 
-# Test binaries
-*.test
-tmp
-test_outputs
-
-# Dependency directories
+# Dependencies
 vendor/
+
+# Test binaries and output
+*.test
+tmp/
+test_outputs/
 
 # Coverage
 *.out
+*.cover
+cover/
+coverage.txt
 
 # Binaries
-bin
-dist
-/cnsd
+bin/
 /cnsctl
-/cns-test
+/cnsd
 
-# Keys 
+# =============================================================================
+# Build & Release
+# =============================================================================
+dist/
+
+# Ko
+.digest
+
+# Cosign / Signing
 cosign.*
 *.pem
+
+# SBOM
 sbom.json
 
-# ko 
-/.digest
-
-# IDE 
-.vscode
-
-#direnv
-.envrc
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+# =============================================================================
+# Project Output
+# =============================================================================
+# Generated recipe/bundle output
+/recipe.yaml
+/bundles/
+/bundles.zip
 
 # Test reports
 report.xml
-nosetests.xml
 coverage.xml
-/recipe.yaml
-/bundles
-/bundles.zip
 
-# Coverage data
-.coverage
-.coverage.*
-*.cover
-*.py,cover
-cover/
-coverage.txt
-htmlcov/
-
-# Distribution directories
-dist/
-
-### JetBrains IDEs (GoLand, PyCharm, IntelliJ) ###
-# User-specific stuff
-.idea/**/workspace.xml
-.idea/**/tasks.xml
-.idea/**/usage.statistics.xml
-.idea/**/dictionaries
-.idea/**/shelf
-
-# Sensitive or high-churn files
-.idea/**/dataSources/
-.idea/**/dataSources.ids
-.idea/**/dataSources.local.xml
-.idea/**/sqlDataSources.xml
-.idea/**/dynamic.xml
-.idea/**/uiDesigner.xml
-.idea/**/dbnavigator.xml
-
-# AWS User-specific
-.idea/**/aws.xml
-
-# Gradle
-.idea/**/gradle.xml
-.idea/**/libraries
-
-# CMake
-cmake-build-*/
-
-
-# Mongo Explorer plugin
-.idea/**/mongoSettings.xml
-
-# File-based project format
-*.iws
-
-# IntelliJ output
-out/
-
-# mpeltonen/sbt-idea plugin
-.idea_modules/
-
-# JIRA plugin
-atlassian-ide-plugin.xml
-
-# Cursive Clojure plugin
-.idea/replstate.xml
-
-# SonarLint plugin
-.idea/sonarlint/
-.idea/**/sonarlint/
-
-# SonarQube Plugin
-.idea/**/sonarIssues.xml
-
-# Crashlytics plugin
-com_crashlytics_export_strings.xml
-crashlytics.properties
-crashlytics-build.properties
-fabric.properties
-
-# Editor-based Rest Client
-.idea/httpRequests
-
-# Android studio serialized cache file
-.idea/caches/build_file_checksums.ser
-
-# Markdown Navigator plugin
-.idea/**/markdown-navigator.xml
-.idea/**/markdown-navigator-enh.xml
-.idea/**/markdown-navigator/
-
-# Cache file creation bug
-.idea/$CACHE_FILE$
-
-# CodeStream plugin
-.idea/codestream.xml
-
-# Azure Toolkit for IntelliJ plugin
-.idea/**/azureSettings.xml
-
-# Uncomment for module files auto-import
-# .idea/artifacts
-# .idea/compiler.xml
-# .idea/jarRepositories.xml
-# .idea/modules.xml
-# .idea/*.iml
-# .idea/modules
-# *.iml
-# *.ipr
-# modules.xml
-# .idea/misc.xml
-
-### Visual Studio Code ###
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-!.vscode/*.code-snippets
-
-# Local History for Visual Studio Code
-.history/
-.history
-.ionide
-
-# Built Visual Studio Code Extensions
-*.vsix
-
-### Vim ###
-# Swap files
-[._]*.s[a-v][a-z]
-!*.svg  # comment out if you don't need vector files
-[._]*.sw[a-p]
-[._]s[a-rt-v][a-z]
-[._]ss[a-gi-z]
-[._]sw[a-p]
-
-# Session
-Session.vim
-Sessionx.vim
-
-# Temporary
-.netrwhist
-
-# Auto-generated tag files
-tags
-
-# Persistent undo
-[._]*.un~
-
-### Emacs ###
-*~
-\#*\#
-/.emacs.desktop
-/.emacs.desktop.lock
-*.elc
-auto-save-list
-tramp
-.\#*
-
-# Org-mode
-.org-id-locations
-*_archive
-
-# flymake-mode
-*_flymake.*
-
-# eshell files
-/eshell/history
-/eshell/lastdir
-
-# elpa packages
-/elpa/
-
-# reftex files
-*.rel
-
-# AUCTeX auto folder
-/auto/
-
-# cask packages
-.cask/
-
-# Flycheck
-flycheck_*.el
-
-# server auth directory
-/server/
-
-# projectiles files
-.projectile
-
-# directory configuration
-.dir-locals.el
-
-# network security
-/network-security.data
-
-# ============================================================================
-# Notebooks & Interactive Development
-# ============================================================================
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# ============================================================================
-# Python Type Checkers & Linters
-# ============================================================================
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# ruff
-.ruff_cache/
-
-# LSP config files
-pyrightconfig.json
-
-# ============================================================================
-# Python Web Frameworks
-# ============================================================================
-# Django
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask
-instance/
-.webassets-cache
-
-# Scrapy
-.scrapy
-
-# Celery
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# Translations
-*.mo
-*.pot
-
-# ============================================================================
-# Infrastructure as Code
-# ============================================================================
-
-### Terraform ###
-# Local .terraform directories
-**/.terraform/*
-
-# .tfstate files
-*.tfstate
-*.tfstate.*
-
-# Crash log files
-crash.log
-crash.*.log
-
-# Sensitive data files
-*.tfvars
-*.tfvars.json
-
-# Override files
-override.tf
-override.tf.json
-*_override.tf
-*_override.tf.json
-
-### Helm ###
-# Chart dependencies
-**/charts/*.tgz
-
-# Ignore generated credentials from google-github-actions/auth
-gha-creds-*.json
-
-# Terraform 
-.terraformrc
-*_override.tf
-*_override.tf.json
-*.tfstate
-*.tfstate.*
-*.tfvars
-crash.*.log
-crash.log
-override.tf
-override.tf.json
-terraform.rc
-
-# Teraform Demo 
-.terraform
-.terraform.lock.hcl
-
-# ============================================================================
-# Project-Specific Files
-# ============================================================================
+# Image digests
 digests.txt
 images.json
 
+# =============================================================================
+# Terraform
+# =============================================================================
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# =============================================================================
+# Helm
+# =============================================================================
+**/charts/*.tgz
+
+# =============================================================================
+# Credentials & Secrets
+# =============================================================================
+.env
+.envrc
+gha-creds-*.json
+
+# =============================================================================
+# IDEs
+# =============================================================================
+# VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# JetBrains (GoLand, IntelliJ)
+.idea/
+
+# Vim
+*.swp
+*.swo
+*~
+Session.vim
+.netrwhist
+tags
+
+# Emacs
+\#*\#
+.\#*
