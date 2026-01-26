@@ -1,10 +1,13 @@
 #!/bin/bash
-set -eo pipefail
+set -euo pipefail
 
 # Dir setup
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${DIR}/common"
 ROOT=$(dirname "${DIR}")
+
+# Check required tools
+has_tools kubectl
 
 # Prompt user to confirm cleanup
 read -p "Are you sure you want to clean up CNS resources? (y/N): " confirm

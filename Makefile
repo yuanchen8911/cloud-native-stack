@@ -191,6 +191,10 @@ clean-all: clean ## Deep cleans including Go module cache
 	@go clean -modcache
 	@echo "Deep clean completed"
 
+.PHONY: cleanup
+cleanup: ## Cleans up CNS Kubernetes resources (requires kubectl)
+	tools/cleanup
+
 .PHONY: demos
 demos: ## Creates demo GIFs using VHS tool
 	vhs docs/demos/videos/cli.tape -o docs/demos/videos/cli.gif

@@ -1,5 +1,5 @@
 #!/bin/bash
-set -eo pipefail
+set -euo pipefail
 
 # =============================================================================
 # E2E Integration Tests for cnsctl CLI
