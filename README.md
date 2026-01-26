@@ -46,6 +46,20 @@ This separation allows the same validated configuration to be applied consistent
 
 > Some tooling and APIs are under active development; documentation reflects current and near-term capabilities.
 
+### Installation
+
+**macOS (Homebrew):**
+```shell
+brew install mchmarny/cloud-native-stack/cnsctl
+```
+
+**Linux/macOS (script):**
+```shell
+curl -sfL https://raw.githubusercontent.com/nvidia/cloud-native-stack/refs/heads/main/install | bash -s --
+```
+
+See [Installation Guide](docs/user-guide/installation.md) for manual installation, building from source, and container images.
+
 ### Quick Start
 
 Get started quickly with CNS:

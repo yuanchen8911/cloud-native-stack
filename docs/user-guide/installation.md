@@ -13,7 +13,17 @@ This guide describes how to install Cloud Native Stack (CNS) CLI tool (`cnsctl`)
 
 ## Install cnsctl CLI
 
-### Option 1: Automated Installation (Recommended)
+### Option 1: Homebrew (macOS)
+
+Install using Homebrew on macOS:
+
+```shell
+brew install mchmarny/cloud-native-stack/cnsctl
+```
+
+This installs the latest release and handles updates via `brew upgrade cnsctl`.
+
+### Option 2: Automated Installation (Recommended for Linux)
 
 Install the latest version using the installation script:
 
@@ -29,7 +39,7 @@ This script:
 
 > **Supply Chain Security**: CNS includes SLSA Build Level 3 compliance with signed SBOMs and verifiable attestations. See [SECURITY](../SECURITY.md#supply-chain-security) for verification instructions.
 
-### Option 2: Manual Installation
+### Option 3: Manual Installation
 
 1. **Download the latest release**
 
@@ -55,7 +65,7 @@ sudo chmod +x /usr/local/bin/cnsctl
 cnsctl --version
 ```
 
-### Option 3: Build from Source
+### Option 4: Build from Source
 
 **Requirements:**
 - Go 1.25 or higher
