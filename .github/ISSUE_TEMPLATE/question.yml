@@ -4,19 +4,29 @@ title: "[Question]: "
 labels: ["question", "needs-triage"]
 
 body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before asking, please check:**
+        - [Documentation](https://github.com/NVIDIA/cloud-native-stack/tree/main/docs)
+        - [Existing issues](https://github.com/NVIDIA/cloud-native-stack/issues?q=is%3Aissue)
+        - [Discussions](https://github.com/NVIDIA/cloud-native-stack/discussions)
+
   - type: checkboxes
     id: prerequisites
     attributes:
       label: Prerequisites
       options:
-        - label: I searched existing issues and docs
+        - label: I searched existing issues and discussions
+          required: true
+        - label: I checked the documentation
           required: true
 
   - type: textarea
     id: question
     attributes:
       label: Question
-      description: What would you like to know?
+      description: What would you like to know? Be as specific as possible.
     validations:
       required: true
 
@@ -25,12 +35,15 @@ body:
     attributes:
       label: Category
       options:
-        - Installation/Deployment
-        - Configuration
-        - Troubleshooting
-        - Performance/Monitoring
-        - Integration
-        - Best Practices
+        - Installation / Deployment
+        - CLI usage (cnsctl)
+        - API usage (cnsd)
+        - Recipe configuration
+        - Bundler output / Helm values
+        - Troubleshooting errors
+        - Performance / Monitoring
+        - Integration with other tools
+        - Best practices
         - Other
     validations:
       required: true
@@ -39,23 +52,22 @@ body:
     id: context
     attributes:
       label: Context
-      description: Relevant details about your setup (redact credentials/secrets).
+      description: Relevant details about your setup. Redact any credentials or secrets.
       placeholder: |
         - What you're trying to accomplish:
-        - CNS version (CLI `cnsctl version`, API image tag, or commit SHA):
+        - CNS version (`cnsctl version`):
         - Platform (eks/gke/aks/self-managed):
         - Kubernetes version:
-        - OS + version, kernel:
         - GPU type (if applicable):
         - Commands you ran:
         - Output / errors:
     validations:
       required: false
 
-  - type: markdown
+  - type: textarea
+    id: attempts
     attributes:
-      value: |
-        Helpful links:
-        - User guide: https://github.com/NVIDIA/cloud-native-stack/tree/main/docs/user-guide
-        - Examples: https://github.com/NVIDIA/cloud-native-stack/tree/main/examples
-        - API reference: https://github.com/NVIDIA/cloud-native-stack/blob/main/docs/integration/api-reference.md
+      label: What have you tried?
+      description: List any approaches or workarounds you've already attempted.
+    validations:
+      required: false

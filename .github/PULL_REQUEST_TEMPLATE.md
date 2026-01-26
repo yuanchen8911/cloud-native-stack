@@ -1,56 +1,66 @@
 ## Summary
 
-<!-- What changed? Keep it short. -->
+<!-- What changed? Keep it short (1-2 sentences). -->
 
 ## Motivation / Context
 
-<!-- Why is this change needed? Link issues/discussions if applicable. -->
+<!-- Why is this change needed? Link issues/discussions. -->
 
-Fixes: <!-- #123 -->
-Related: <!-- #123 -->
+Fixes: <!-- #123 or N/A -->
+Related: <!-- #123 or N/A -->
 
 ## Type of Change
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Breaking change
-- [ ] Documentation
-- [ ] Refactoring
-- [ ] Build/CI
+
+<!-- Check all that apply -->
+
+- [ ] Bug fix (non-breaking change that fixes an issue)
+- [ ] New feature (non-breaking change that adds functionality)
+- [ ] Breaking change (fix or feature that would cause existing functionality to change)
+- [ ] Documentation update
+- [ ] Refactoring (no functional changes)
+- [ ] Build/CI/tooling
 
 ## Component(s) Affected
+
 - [ ] CLI (`cmd/cnsctl`, `pkg/cli`)
 - [ ] API server (`cmd/cnsd`, `pkg/api`, `pkg/server`)
 - [ ] Recipe engine / data (`pkg/recipe`)
-- [ ] Bundlers (`pkg/bundler`)
+- [ ] Bundlers (`pkg/bundler`, `pkg/component/*`)
 - [ ] Collectors / snapshotter (`pkg/collector`, `pkg/snapshotter`)
+- [ ] Validator (`pkg/validator`)
+- [ ] Core libraries (`pkg/errors`, `pkg/k8s`)
 - [ ] Docs/examples (`docs/`, `examples/`)
 - [ ] Other: ____________
 
 ## Implementation Notes
 
-<!-- Key decisions, trade-offs, and any non-obvious behavior changes. -->
+<!-- Key decisions, trade-offs, and any non-obvious behavior changes. Delete if not applicable. -->
 
 ## Testing
 
-<!-- Paste command(s) and summarize results. Prefer `make qualify` when relevant. -->
+```bash
+# Commands run (prefer `make qualify` for non-trivial changes)
+make qualify
+```
 
-- [ ] `make test`
-- [ ] `make lint`
-- [ ] `make scan` (if applicable)
-- [ ] `make qualify` (optional but preferred for non-trivial changes)
+<!-- Summarize test results or paste relevant output -->
 
-## Risk / Rollout
+## Risk Assessment
 
-<!-- What could break? What’s the blast radius? Any backwards compatibility notes? -->
+<!-- Select one and explain -->
 
-- Risk level: Low / Medium / High
-- Rollout/upgrade notes (if any):
+- [ ] **Low** — Isolated change, well-tested, easy to revert
+- [ ] **Medium** — Touches multiple components or has broader impact
+- [ ] **High** — Breaking change, affects critical paths, or complex rollout
+
+**Rollout notes:** <!-- Migration steps, feature flags, backwards compatibility, or N/A -->
 
 ## Checklist
 
-- [ ] I ran the tests relevant to this change and they pass
-- [ ] I did not disable or skip tests to make CI green
-- [ ] I added/updated tests where it makes sense
-- [ ] I updated docs/examples if user-facing behavior changed
-- [ ] I kept changes focused and consistent with existing patterns
-- [ ] (If required) commits are signed off (DCO): `git commit -s`
+- [ ] Tests pass locally (`make test` with `-race`)
+- [ ] Linter passes (`make lint`)
+- [ ] I did not skip/disable tests to make CI green
+- [ ] I added/updated tests for new functionality
+- [ ] I updated docs if user-facing behavior changed
+- [ ] Changes follow existing patterns in the codebase
+- [ ] Commits are signed off (`git commit -s`) — [DCO info](https://developercertificate.org/)

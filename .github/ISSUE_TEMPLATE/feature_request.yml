@@ -62,15 +62,28 @@ body:
     attributes:
       label: Component
       options:
-        - CLI
-        - API server
+        - CLI (cnsctl)
+        - API server (cnsd)
         - Recipe engine / data
-        - Bundlers
+        - Bundlers (gpu-operator, network-operator, etc.)
         - Collectors / snapshotter
-        - Deployment/Config
-        - Docs/examples
-        - New Component
-        - Multiple Components
+        - Validator
+        - Core libraries (errors, k8s client)
+        - Docs / examples
+        - New component
+        - Multiple components
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Nice to have
+        - Important (would improve my workflow)
+        - Critical (blocking adoption or major use case)
     validations:
       required: true
 

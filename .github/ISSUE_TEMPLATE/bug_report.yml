@@ -9,9 +9,11 @@ body:
     attributes:
       label: Prerequisites
       options:
-        - label: I searched existing issues
+        - label: I searched existing issues and found no duplicates
           required: true
-        - label: I can reproduce this issue
+        - label: I can reproduce this issue consistently
+          required: true
+        - label: This is not a security vulnerability (use [Security Advisories](https://github.com/NVIDIA/cloud-native-stack/security/advisories/new) instead)
           required: true
 
   - type: textarea
@@ -40,13 +42,26 @@ body:
     attributes:
       label: Component
       options:
-        - CLI
-        - API server
+        - CLI (cnsctl)
+        - API server (cnsd)
         - Recipe engine / data
-        - Bundlers
+        - Bundlers (gpu-operator, network-operator, etc.)
         - Collectors / snapshotter
-        - Docs/examples
-        - Other
+        - Validator
+        - Docs / examples
+        - Other / Unknown
+    validations:
+      required: true
+
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Regression?
+      description: Did this work in a previous version?
+      options:
+        - "Yes, this worked before (please specify version below)"
+        - "No, this is a new use case"
+        - "Unknown / first time using this feature"
     validations:
       required: true
 
@@ -121,12 +136,9 @@ body:
   - type: textarea
     id: logs
     attributes:
-      label: Logs/Output
-      description: Include relevant logs or error messages (redact credentials/secrets).
-      placeholder: |
-        ```
-        # Logs here
-        ```
+      label: Logs / Error Output
+      description: Include relevant logs or error messages. Redact any credentials or secrets.
+      render: shell
 
   - type: textarea
     id: additional
