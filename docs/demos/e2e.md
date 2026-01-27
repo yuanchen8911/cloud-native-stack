@@ -143,9 +143,8 @@ Bundle as an OCI image:
 cnsctl bundle \
   --recipe recipe.yaml \
   --output oci://ghcr.io/mchmarny/cns-bundle \
-  --image-refs .digest \
   --deployer argocd \
-  --repo https://github.com/mchmarny/cluster.git
+  --image-refs .digest
 ```
 
 Review manifest: 
