@@ -81,26 +81,38 @@ make server   # Start API server locally
 
 → See Extended Reference: Adding a New Collector for full example
 
-### I Need To: Generate Bundles for New Operator
+### I Need To: Add Support for New Component/Operator
 
-1. **Create bundler** in `pkg/bundler/<name>/`:
-   - Embed `BaseBundler` (reduces boilerplate by 75%)
-   - Implement `Make()` method
-   - Use `internal` helpers for recipe extraction
-   - Self-register with `MustRegister()` in `init()`
-
-2. **Add templates** in `templates/` directory:
-   - Use `go:embed` for portability
-   - Pass Go structs directly (no map conversion)
-
-3. **Write tests** with `TestHarness`:
-   ```go
-   harness := internal.NewTestHarness(t, NewBundler())
-   result := harness.RunTest(recipe, wantErr)
-   harness.AssertFileContains(dir, "values.yaml", "version:")
+1. **Add to component registry** (`pkg/recipe/data/registry.yaml`):
+   ```yaml
+   - name: my-operator
+     displayName: My Operator
+     valueOverrideKeys: [myoperator]
+     helm:
+       defaultRepository: https://charts.example.com
+       defaultChart: example/my-operator
    ```
 
-→ See Extended Reference: Adding a New Bundler for full guide
+2. **Create values file** (`pkg/recipe/data/components/my-operator/values.yaml`):
+   - Define Helm chart values
+   - Keep configuration minimal and reusable
+
+3. **Reference in recipe** (`pkg/recipe/data/overlays/*.yaml`):
+   ```yaml
+   componentRefs:
+     - name: my-operator
+       type: Helm
+       version: v1.0.0
+       valuesFile: components/my-operator/values.yaml
+   ```
+
+4. **Run tests**:
+   ```bash
+   go test -v ./pkg/recipe/... -run TestComponentRegistry
+   make test
+   ```
+
+→ See [Bundler Development Guide](docs/architecture/component.md) for full details
 
 ### I Need To: Add New API Endpoint
 

@@ -34,6 +34,12 @@ Recipe from API:
 curl -s "https://cns.dgxc.io/v1/recipe?service=eks&accelerator=gb200&intent=training" | jq .
 ```
 
+Allowed list support in self-hosted API:
+
+```shell
+curl -s "https://cns.dgxc.io/v1/recipe?service=eks&accelerator=l40&intent=training" | jq .
+```
+
 Make Snapshot: 
 
 ```shell
@@ -94,12 +100,6 @@ curl -s "https://cns.dgxc.io/v1/recipe?service=eks&accelerator=h100&intent=train
     -H "Content-Type: application/json" -d @- -o bundle.zip
 ```
 
-Same content: 
-
-```shell
-unzip -l bundle.zip
-```
-
 Navigate into the bundle:
 
 ```shell
@@ -124,17 +124,23 @@ Check the integrity of its content
 shasum -a 256 -c checksums.txt
 ```
 
-View bundle README: 
-
-```shell
-grip --browser --quiet ./bundle/README.md
-```
-
 Prep the deployment: 
 
 ```shell
 helm dependency update
 tree .
+```
+
+Validate Bundle: 
+
+```shell
+helm lint .
+```
+
+View bundle README: 
+
+```shell
+grip --browser --quiet ./bundle/README.md
 ```
 
 Bundle as an OCI image:

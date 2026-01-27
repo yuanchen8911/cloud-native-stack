@@ -1,88 +1,79 @@
 /*
 Package bundler provides orchestration for generating deployment bundles from recipes.
 
-The bundler package coordinates parallel execution of component implementations to transform
-recipe configurations into deployment-ready artifacts (Helm values, manifests, scripts).
+The bundler package generates deployment-ready artifacts (Helm umbrella charts or
+ArgoCD applications) from recipe configurations. Component configuration is loaded
+from the declarative component registry (pkg/recipe/data/registry.yaml).
 
 # Architecture
 
-  - Registry Pattern: Thread-safe component registry
-  - DefaultBundler: Orchestrates parallel bundle generation
-  - Functional Options: Configuration via WithBundlerTypes, WithConfig, etc.
-  - result.Result: Individual component execution result
-  - result.Output: Aggregated results from all components
-
-Component implementations are in pkg/component (gpuoperator, networkoperator, etc.).
+  - DefaultBundler: Generates Helm umbrella charts or ArgoCD applications
+  - Component Registry: Declarative configuration in pkg/recipe/data/components.yaml
+  - Deployers: Helm (default) and ArgoCD output formats
+  - result.Output: Aggregated generation results
 
 # Quick Start
 
-	import _ "github.com/NVIDIA/cloud-native-stack/pkg/component/gpuoperator"  // Auto-registers
-
 	b, err := bundler.New()
-	output, err := b.Make(ctx, recipe, "./bundles")
-	fmt.Printf("Generated: %s\n", output.Summary())
+	output, err := b.Make(ctx, recipeResult, "./bundle")
+	fmt.Printf("Generated: %d files\n", output.TotalFiles)
 
 With options:
 
-	b, err := bundler.New(
-		bundler.WithBundlerTypes([]types.BundleType{types.BundleTypeGpuOperator}),
-		bundler.WithFailFast(true),
+	cfg := config.NewConfig(
+	    config.WithDeployer(config.DeployerHelm),
+	    config.WithIncludeChecksums(true),
 	)
+	b, err := bundler.New(bundler.WithConfig(cfg))
 
-# Supported Bundlers
+# Supported Components
 
-  - gpu-operator: GPU Operator (values.yaml, ClusterPolicy, scripts)
-  - network-operator: Network Operator (values.yaml, NicClusterPolicy, scripts)
-  - nvidia-dra-driver-gpu: NVIDIA DRA Driver (values.yaml, scripts)
-  - cert-manager: Certificate Manager (values.yaml, scripts)
-  - nvsentinel: NVSentinel (values.yaml, scripts)
-  - skyhook-operator: Skyhook node optimization (values.yaml, Skyhook CR, scripts)
+Components are defined in pkg/recipe/data/registry.yaml:
 
-# Execution
+  - gpu-operator: NVIDIA GPU Operator
+  - network-operator: NVIDIA Network Operator
+  - nvidia-dra-driver-gpu: NVIDIA DRA Driver
+  - cert-manager: Certificate Manager
+  - nvsentinel: NVSentinel
+  - skyhook-operator: Skyhook node optimization
 
-Bundlers run concurrently by default. Use WithFailFast(true) to stop on first error.
+# Output Formats
+
+Helm (default):
+  - Chart.yaml: Helm umbrella chart with dependencies
+  - values.yaml: Combined values for all components
+  - README.md: Deployment instructions
+  - recipe.yaml: Copy of the input recipe
+  - templates/: Custom manifest templates (if any)
+
+ArgoCD:
+  - app-of-apps.yaml: Parent ArgoCD Application
+  - <component>/application.yaml: ArgoCD Application per component
+  - <component>/values.yaml: Values for each component
 
 # Configuration
 
 	cfg := config.NewConfig(
 	    config.WithDeployer(config.DeployerHelm),
 	    config.WithIncludeReadme(true),
+	    config.WithSystemNodeSelector(map[string]string{"node-role": "system"}),
 	)
 	b, err := bundler.New(bundler.WithConfig(cfg))
 
-# Error Handling
+# Adding New Components
 
-	output, err := b.Make(ctx, recipe, dir)
-	if output.HasErrors() {
-		for _, e := range output.Errors {
-			fmt.Printf("Bundler %s failed: %s\n", e.BundlerType, e.Error)
-		}
-	}
+To add a new component, add an entry to pkg/recipe/data/components.yaml.
+No Go code is required:
 
-# Thread Safety
-
-  - Registry: Thread-safe for concurrent reads/writes
-  - DefaultBundler: Safe for concurrent Make() calls
-  - Bundler implementations: Should be stateless
-
-# Creating Custom Bundlers
-
-Implement the types.Bundler interface:
-
-	type Bundler struct {
-		config *config.Config
-	}
-
-	func (b *Bundler) Make(ctx context.Context, recipe *recipe.Recipe,
-		dir string) (*result.Result, error) {
-		result := result.New(BundleTypeMyBundler)
-		// Generate bundle files...
-		result.AddFile(filepath, size)
-		result.MarkSuccess()
-		return result, nil
-	}
-
-See pkg/component/gpuoperator for a complete example.
+  - name: my-component
+    displayName: My Component
+    valueOverrideKeys: [mycomponent]
+    helm:
+    defaultRepository: https://charts.example.com
+    defaultChart: example/my-component
+    nodeScheduling:
+    system:
+    nodeSelectorPaths: [operator.nodeSelector]
 
 See https://github.com/NVIDIA/cloud-native-stack for more information.
 */

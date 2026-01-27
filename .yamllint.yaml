@@ -15,6 +15,9 @@ ignore: |
   # Examples (generated/reference files with varying styles)
   examples/
 
+  # Helm templates (contain Go template syntax, not valid YAML)
+  pkg/recipe/data/components/*/manifests/
+
   # Git directory
   .git/
 

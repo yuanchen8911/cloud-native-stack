@@ -60,9 +60,9 @@ NVIDIA Cloud Native Stack (CNS) generates validated GPU-accelerated Kubernetes c
 |---------|---------|-----------------|
 | `pkg/cli` | User interaction, input validation, output formatting | No |
 | `pkg/api` | REST API handlers | No |
-| `pkg/recipe` | Recipe resolution and overlay system | Yes |
-| `pkg/bundler` | Artifact generation framework | Yes |
-| `pkg/component/*` | Individual bundlers (GPU Operator, Network Operator, etc.) | Yes |
+| `pkg/recipe` | Recipe resolution, overlay system, component registry | Yes |
+| `pkg/bundler` | Umbrella chart generation from recipes | Yes |
+| `pkg/component` | Bundler utilities and test helpers | Yes |
 | `pkg/collector` | System state collection | Yes |
 | `pkg/validator` | Constraint evaluation | Yes |
 | `pkg/errors` | Structured error handling with codes | Yes |
@@ -165,27 +165,24 @@ slog.Error("operation failed", "error", err, "component", "gpu-collector")
 
 | Task | Location | Key Points |
 |------|----------|------------|
-| New bundler | `pkg/component/<name>/` | Embed `BaseBundler`, implement `Make()`, self-register with `MustRegister()` |
+| New component | `pkg/recipe/data/registry.yaml` | Add entry with name, displayName, helm settings, nodeScheduling |
+| Component values | `pkg/recipe/data/components/<name>/` | Create values.yaml with Helm chart configuration |
 | New collector | `pkg/collector/<type>/` | Implement `Collector` interface, add to factory |
 | New API endpoint | `pkg/api/` | Handler + middleware chain + OpenAPI spec update |
 | Fix test failures | Run `make test` | Check race conditions (`-race`), verify context handling |
 
-**Bundler template (use pkg/component/gpuoperator as reference):**
-```go
-func init() {
-    bundler.MustRegister(bundlerType, NewBundler())
-}
-
-type Bundler struct {
-    *bundler.BaseBundler
-}
-
-func (b *Bundler) Make(ctx context.Context, input *result.RecipeResult, outputDir string) (*bundler.Result, error) {
-    component := input.GetComponentRef(Name)
-    values := input.GetValuesForComponent(Name)
-    // Generate files...
-    return b.GenerateResult(outputDir, generatedFiles)
-}
+**Adding a new component (declarative - no Go code needed):**
+```yaml
+# pkg/recipe/data/registry.yaml
+- name: my-operator
+  displayName: My Operator
+  valueOverrideKeys: [myoperator]
+  helm:
+    defaultRepository: https://charts.example.com
+    defaultChart: example/my-operator
+  nodeScheduling:
+    system:
+      nodeSelectorPaths: [operator.nodeSelector]
 ```
 
 ## Commands
@@ -235,7 +232,9 @@ When choosing between approaches, prioritize in this order:
 
 | File | Purpose |
 |------|---------|
+| `pkg/recipe/data/registry.yaml` | Declarative component configuration |
 | `pkg/recipe/data/overlays/*.yaml` | Recipe overlay definitions |
+| `pkg/recipe/data/components/*/values.yaml` | Component Helm values |
 | `api/cns/v1/server.yaml` | OpenAPI spec |
 | `.goreleaser.yaml` | Release configuration |
 | `go.mod` | Dependencies |

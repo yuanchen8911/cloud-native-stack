@@ -66,6 +66,10 @@ type GeneratorInput struct {
 
 	// IncludeChecksums indicates whether to generate a checksums.txt file.
 	IncludeChecksums bool
+
+	// ManifestContents maps manifest file paths to their contents.
+	// These are copied to the chart's templates/ directory.
+	ManifestContents map[string][]byte
 }
 
 // GeneratorOutput contains the result of umbrella chart generation.
@@ -136,6 +140,15 @@ func (g *Generator) Generate(ctx context.Context, input *GeneratorInput, outputD
 	output.Files = append(output.Files, readmePath)
 	output.TotalSize += readmeSize
 
+	// Generate templates directory with manifest files
+	templateFiles, templateSize, err := g.generateTemplates(ctx, input, outputDir)
+	if err != nil {
+		return nil, errors.Wrap(errors.ErrCodeInternal,
+			"failed to generate templates", err)
+	}
+	output.Files = append(output.Files, templateFiles...)
+	output.TotalSize += templateSize
+
 	// Generate checksums.txt if requested
 	if input.IncludeChecksums {
 		if err := checksum.GenerateChecksums(ctx, outputDir, output.Files); err != nil {
@@ -156,7 +169,7 @@ func (g *Generator) Generate(ctx context.Context, input *GeneratorInput, outputD
 	output.DeploymentSteps = []string{
 		fmt.Sprintf("cd %s", outputDir),
 		"helm dependency update",
-		"helm install cns-stack .",
+		"helm install cns-stack . -n cns-stack --create-namespace",
 	}
 
 	slog.Debug("umbrella chart generated",
@@ -456,4 +469,37 @@ func SortComponentsByDeploymentOrder(components []string, deploymentOrder []stri
 	})
 
 	return sorted
+}
+
+// generateTemplates creates the templates directory with manifest files.
+func (g *Generator) generateTemplates(ctx context.Context, input *GeneratorInput, outputDir string) ([]string, int64, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	if len(input.ManifestContents) == 0 {
+		return nil, 0, nil
+	}
+
+	templatesDir := filepath.Join(outputDir, "templates")
+	if err := os.MkdirAll(templatesDir, 0755); err != nil {
+		return nil, 0, fmt.Errorf("failed to create templates directory: %w", err)
+	}
+
+	files := make([]string, 0, len(input.ManifestContents))
+	var totalSize int64
+
+	for path, content := range input.ManifestContents {
+		filename := filepath.Base(path)
+		outputPath := filepath.Join(templatesDir, filename)
+
+		if err := os.WriteFile(outputPath, content, 0600); err != nil {
+			return nil, 0, fmt.Errorf("failed to write template %s: %w", filename, err)
+		}
+
+		files = append(files, outputPath)
+		totalSize += int64(len(content))
+	}
+
+	return files, totalSize, nil
 }

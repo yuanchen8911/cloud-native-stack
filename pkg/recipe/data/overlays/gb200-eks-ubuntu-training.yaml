@@ -30,5 +30,7 @@ spec:
     # Override with Ubuntu customization for Skyhook
     - name: skyhook-operator
       type: Helm
+      manifestFiles:
+        - components/skyhook-operator/manifests/customization-ubuntu.yaml
       overrides:
         customization: ubuntu

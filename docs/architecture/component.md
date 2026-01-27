@@ -1,282 +1,256 @@
 # Bundler Development Guide
 
-Learn how to create new bundlers for Cloud Native Stack.
+Learn how to add new components to Cloud Native Stack.
 
 ## Overview
 
-Bundlers convert RecipeInput objects into deployment artifacts. Artifacts include Helm values files, Kubernetes manifests, and optional custom manifests. Deployment documentation (READMEs) is generated at the deployer level, not by individual component bundlers.
+The bundler system converts RecipeInput objects into deployment artifacts. Artifacts include Helm values files, Kubernetes manifests, and optional custom manifests. Deployment documentation (READMEs) is generated at the deployer level, not by individual component bundlers.
 
-**Framework features:**
+**Architecture:**
 
-- **Generic bundler framework**: `ComponentConfig` struct + `MakeBundle()` function handles all common logic
-- **Factory registration**: Bundlers register factory functions via `registry.MustRegister()` in `init()`
-- **RecipeInput interface**: Single `Make()` method handles both Recipe and RecipeResult via interface
-- **BaseBundler**: Helper struct from `pkg/component/internal` providing file operations
-- **Config injection**: Bundlers receive `*config.Config` with value overrides, node selectors, etc.
-- **Parallel execution**: Multiple bundlers run concurrently via `goroutines` with `errgroup` context cancellation
-- **Template system**: Bundlers embed templates individually using `go:embed` directive
+- **Declarative Component Registry**: Component configuration is defined in `pkg/recipe/data/registry.yaml`
+- **No separate Go packages**: Adding a new component only requires a registry entry and values files
+- **DefaultBundler**: The `pkg/bundler` package generates Helm umbrella charts from recipes
+- **Recipe-driven**: Components are selected based on recipe's `componentRefs`
 - **Value overrides**: CLI `--set` flag allows runtime customization via `ApplyMapOverrides()`
+- **Node scheduling**: Registry defines paths for injecting node selectors and tolerations
 - **Structured errors**: Uses `pkg/errors` for error codes and wrapping
 
 ## Quick Start
 
-### Minimal Bundler Implementation
+### Adding a New Component (Declarative Approach)
 
-The bundler framework uses a **declarative configuration pattern**. Define a `ComponentConfig` and delegate to `MakeBundle()`:
+Adding a new component requires **no Go code**. Simply add an entry to the component registry:
 
-```go
-// pkg/component/mybundler/bundler.go
-package mybundler
+**Step 1: Add to `pkg/recipe/data/registry.yaml`**
 
-import (
-    "context"
+```yaml
+components:
+  # ... existing components ...
 
-    "github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
-    "github.com/NVIDIA/cloud-native-stack/pkg/bundler/registry"
-    "github.com/NVIDIA/cloud-native-stack/pkg/bundler/result"
-    "github.com/NVIDIA/cloud-native-stack/pkg/bundler/types"
-    "github.com/NVIDIA/cloud-native-stack/pkg/component/internal"
-    "github.com/NVIDIA/cloud-native-stack/pkg/recipe"
-)
-
-const (
-    Name = "my-bundler"
-)
-
-func init() {
-    // Register bundler factory in global registry
-    registry.MustRegister(types.BundleTypeMyBundler, func(cfg *config.Config) registry.Bundler {
-        return NewBundler(cfg)
-    })
-}
-
-// componentConfig defines all component-specific settings.
-var componentConfig = internal.ComponentConfig{
-    Name:                  Name,
-    DisplayName:           "My Bundler",
-    ValueOverrideKeys:     []string{"mybundler"},
-    DefaultHelmRepository: "https://charts.example.com",
-    DefaultHelmChart:      "example/my-bundler",
-    TemplateGetter:        GetTemplate,
-}
-
-// Bundler generates deployment bundles from RecipeInput.
-type Bundler struct {
-    *internal.BaseBundler
-}
-
-// NewBundler creates a new bundler instance.
-func NewBundler(cfg *config.Config) *Bundler {
-    return &Bundler{
-        BaseBundler: internal.NewBaseBundler(cfg, types.BundleTypeMyBundler),
-    }
-}
-
-// Make generates the bundle by delegating to the generic MakeBundle function.
-func (b *Bundler) Make(ctx context.Context, input recipe.RecipeInput, dir string) (*result.Result, error) {
-    return internal.MakeBundle(ctx, b.BaseBundler, input, dir, componentConfig)
-}
+  - name: my-operator
+    displayName: My Operator
+    valueOverrideKeys:
+      - myoperator
+    helm:
+      defaultRepository: https://charts.example.com
+      defaultChart: example/my-operator
+      defaultVersion: v1.0.0
+    nodeScheduling:
+      system:
+        nodeSelectorPaths:
+          - operator.nodeSelector
+        tolerationPaths:
+          - operator.tolerations
 ```
 
-That's it! The `MakeBundle()` function handles:
-- Extracting component values from recipe input
-- Applying user value overrides from CLI `--set` flags
-- Applying node selectors and tolerations to configured Helm paths
-- Creating directory structure
-- Writing values.yaml with proper headers
-- Generating custom manifests (if CustomManifestFunc is defined)
-- Computing checksums
+**Step 2: Add component values file**
 
-### Optional Components
+Create `pkg/recipe/data/components/my-operator/values.yaml`:
 
-#### Custom Metadata
-
-For components that need additional metadata beyond the defaults, provide `MetadataExtensions`:
-
-```go
-// componentConfig with custom metadata extensions
-var componentConfig = internal.ComponentConfig{
-    Name:                  Name,
-    DisplayName:           "Cert Manager",
-    ValueOverrideKeys:     []string{"certmanager"},
-    DefaultHelmRepository: "https://charts.jetstack.io",
-    DefaultHelmChart:      "jetstack/cert-manager",
-    TemplateGetter:        GetTemplate,
-    // Custom metadata adds InstallCRDs field accessible in templates
-    MetadataExtensions: map[string]interface{}{
-        "InstallCRDs": true,
-    },
-}
+```yaml
+# My Operator Helm values
+operator:
+  replicas: 1
+  image:
+    repository: example/my-operator
+    tag: v1.0.0
 ```
 
-Access extensions in templates via `{{ .Script.Extensions.InstallCRDs }}`.
+**Step 3: Reference in recipe**
 
-#### Custom Manifest Generation
+Add the component to a recipe overlay in `pkg/recipe/data/overlays/`:
 
-For components that generate additional Kubernetes manifests, provide a `CustomManifestFunc`:
-
-```go
-// componentConfig with custom manifest generation
-var componentConfig = internal.ComponentConfig{
-    Name:                  Name,
-    DisplayName:           "GPU Operator",
-    ValueOverrideKeys:     []string{"gpuoperator"},
-    DefaultHelmRepository: "https://helm.ngc.nvidia.com/nvidia",
-    DefaultHelmChart:      "nvidia/gpu-operator",
-    TemplateGetter:        GetTemplate,
-    // Custom manifest function generates DCGM exporter and kernel module params
-    CustomManifestFunc: func(ctx context.Context, b *internal.BaseBundler,
-        values map[string]interface{}, configMap map[string]string, dir string) ([]string, error) {
-
-        var generatedFiles []string
-        manifestsDir := filepath.Join(dir, "manifests")
-
-        // Generate DCGM exporter ConfigMap if needed
-        dcgmPath := filepath.Join(manifestsDir, "dcgm-exporter.yaml")
-        if err := b.GenerateFileFromTemplate(ctx, GetTemplate, "dcgm-exporter",
-            dcgmPath, manifestData, 0644); err != nil {
-            return generatedFiles, err
-        }
-        generatedFiles = append(generatedFiles, dcgmPath)
-
-        return generatedFiles, nil
-    },
-}
+```yaml
+componentRefs:
+  - name: my-operator
+    type: Helm
+    version: v1.0.0
+    source: https://charts.example.com
+    valuesFile: components/my-operator/values.yaml
 ```
 
-#### Templates (bundler.go + templates/)
+That's it! The bundler system automatically:
+- Loads component configuration from the registry
+- Extracts values from the recipe's valuesFile
+- Applies user value overrides from CLI `--set` flags
+- Applies node selectors and tolerations to configured paths
+- Generates the umbrella chart with the component as a dependency
 
-Templates are embedded in `bundler.go` using `go:embed`. Most bundlers don't need templates as they only generate `values.yaml` and `checksums.txt`. Templates are only needed for custom manifests (e.g., DCGM exporter ConfigMap, kernel module params).
+### Optional: Custom Manifests
 
-```go
-// pkg/component/mybundler/bundler.go - Bundler with custom manifests
-package mybundler
+For components that need additional Kubernetes manifests (beyond the Helm chart), add them to `pkg/recipe/data/components/<name>/manifests/`:
 
-import (
-    _ "embed"
-    // ... other imports
-    "github.com/NVIDIA/cloud-native-stack/pkg/component/internal"
-)
+**Step 1: Create manifest file**
 
-var (
-    //go:embed templates/custom-manifest.yaml.tmpl
-    customManifestTemplate string
+Create `pkg/recipe/data/components/gpu-operator/manifests/dcgm-exporter.yaml`:
 
-    // GetTemplate returns template content using NewTemplateGetter helper.
-    GetTemplate = internal.NewTemplateGetter(map[string]string{
-        "custom-manifest": customManifestTemplate,
-    })
-)
+```yaml
+# DCGM Exporter ConfigMap
+{{- $gpuOp := index .Values "gpu-operator" }}
+{{- if and $gpuOp $gpuOp.dcgmExporter $gpuOp.dcgmExporter.config $gpuOp.dcgmExporter.config.create }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $gpuOp.dcgmExporter.config.name | default "dcgm-exporter" }}
+  namespace: {{ .Release.Namespace }}
+data:
+  dcgm-metrics.csv: |
+    # Metrics configuration
+{{- end }}
+```
+
+**Step 2: Reference in recipe**
+
+Add the manifest to the component's `manifestFiles` in the recipe:
+
+```yaml
+componentRefs:
+  - name: gpu-operator
+    type: Helm
+    version: v25.3.3
+    manifestFiles:
+      - components/gpu-operator/manifests/dcgm-exporter.yaml
+```
+
+The bundler automatically includes manifest files in the umbrella chart's `templates/` directory.
+
+### Registry Configuration Reference
+
+The component registry (`pkg/recipe/data/registry.yaml`) supports these fields:
+
+```yaml
+- name: component-name              # Required: Component identifier
+  displayName: Component Name       # Required: Human-readable name
+  valueOverrideKeys:               # Optional: Alternative --set prefixes
+    - componentname
+  helm:
+    defaultRepository: https://...  # Optional: Default Helm repo URL
+    defaultChart: repo/chart        # Optional: Default chart name
+    defaultVersion: v1.0.0          # Optional: Default chart version
+  nodeScheduling:
+    system:                        # For system/control-plane components
+      nodeSelectorPaths:
+        - operator.nodeSelector
+      tolerationPaths:
+        - operator.tolerations
+    accelerated:                   # For GPU workload components
+      nodeSelectorPaths:
+        - daemonsets.nodeSelector
+      tolerationPaths:
+        - daemonsets.tolerations
 ```
 
 **Note:**
-- Values are written directly to `values.yaml` using `internal.MarshalYAMLWithHeader()`, not via templates
-- Deployment documentation (README) is generated at the deployer level (helm, argocd), not by component bundlers
-- Templates are only needed for custom Kubernetes manifests beyond the standard values.yaml
+- Values are written directly to `values.yaml`, not via templates
+- Deployment documentation (README) is generated at the deployer level (helm, argocd)
+- The `pkg/component` package provides helper utilities if custom bundler logic is needed
 
 ## Best Practices
 
-### Implementation
+### Adding Components
 
-- Use `ComponentConfig` struct for declarative bundler definition
-- Delegate to `internal.MakeBundle()` for all common logic
-- Use `Name` constant instead of hardcoded component names
-- Use `ValueOverrideKeys` to specify which CLI `--set` prefixes apply
-- Use `*NodeSelectorPaths` and `*TolerationPaths` for node scheduling
-- Only add `MetadataFunc` if you need custom metadata fields
-- Only add `CustomManifestFunc` if you need additional K8s manifests
-- Use `go:embed` for template portability
-- Use structured errors from `pkg/errors`
+- **Prefer declarative configuration**: Add entries to `registry.yaml` rather than writing Go code
+- Use consistent naming: component name should match the Helm chart name (e.g., `gpu-operator`)
+- Define `valueOverrideKeys` for user-friendly `--set` prefixes (e.g., `gpuoperator` allows `--set gpuoperator:key=value`)
+- Configure `nodeScheduling` paths only for components that need workload placement
+- Create values files under `pkg/recipe/data/components/<name>/` for reusable configurations
+
+### Values Files
+
+- Keep base values (`values.yaml`) minimal and widely applicable
+- Create overlay values (`values-<context>.yaml`) for specific scenarios
+- Document non-obvious settings with comments
+- Use consistent formatting (2-space indent for YAML)
+
+### Custom Manifests
+
+- Only add custom manifests when the Helm chart doesn't provide needed functionality
+- Use Helm template syntax (not Go templates) for manifest files
+- Reference values via `{{ index .Values "component-name" }}`
+- Make manifests conditional with `{{- if }}` blocks
 
 ### Testing
 
-- Use table-driven tests with `*recipe.RecipeResult`
-- Test with `t.TempDir()` for isolation
-- Test both valid and missing component reference cases
-- Verify file existence with `os.Stat()`
-- Verify file content with `os.ReadFile()` + `strings.Contains()`
-- Test `GetTemplate()` returns expected templates
-- Test `NewBundler()` with nil and valid configs
-
-### Templates
-
-- Use `GetTemplate(name)` function pattern (returns `(string, bool)`) only for bundlers with custom manifests
-- Most bundlers don't need templates - they only generate values.yaml and checksums.txt
-- For custom manifest templates, access metadata via `{{ .Script.Namespace }}`, `{{ .Script.Version }}`
-- Access values in templates: `{{ index .Values "key" }}`
-- Handle missing values gracefully with `{{- if }}`
-- Validate template rendering in tests
+- Run `make test` to validate all recipe data
+- Test recipe generation: `cnsctl recipe --service eks --accelerator gb200`
+- Test bundle generation: `cnsctl bundle -r recipe.yaml -o ./test-bundle`
+- Verify generated `values.yaml` contains expected settings
 
 ### Documentation
 
-- Add package doc.go with overview
-- Document exported types and functions
-- Include examples in README.md template
-- Explain prerequisites and deployment steps
+- Update `pkg/recipe/data/README.md` when adding new components
+- Document component-specific settings in values file comments
+- Add examples to `examples/` directory for common use cases
 
 ## Common Patterns
 
-### Using ComponentConfig
+### Component Registry Structure
 
-The `ComponentConfig` struct defines all component-specific settings declaratively:
+Components are configured in `pkg/recipe/data/registry.yaml`. Here's an example entry:
 
-```go
-var componentConfig = internal.ComponentConfig{
-    // Required fields
-    Name:                  "my-component",           // Component name (matches recipe)
-    DisplayName:           "My Component",           // Human-readable name for headers
-    ValueOverrideKeys:     []string{"mycomponent"},  // CLI --set prefix keys
-    DefaultHelmRepository: "https://charts.example.com",
-    DefaultHelmChart:      "example/my-component",
-    TemplateGetter:        GetTemplate,              // Template access function
-    
-    // Optional: Node scheduling paths (for system/accelerated node flags)
-    SystemNodeSelectorPaths:      []string{"operator.nodeSelector"},
-    SystemTolerationPaths:        []string{"operator.tolerations"},
-    AcceleratedNodeSelectorPaths: []string{"daemonsets.nodeSelector"},
-    AcceleratedTolerationPaths:   []string{"daemonsets.tolerations"},
-    
-    // Optional: Custom extensions
-    MetadataFunc:       nil,  // Custom metadata for README templates
-    CustomManifestFunc: nil,  // Additional K8s manifest generation
-}
+```yaml
+- name: gpu-operator
+  displayName: GPU Operator
+  valueOverrideKeys:
+    - gpuoperator
+  helm:
+    defaultRepository: https://helm.ngc.nvidia.com/nvidia
+    defaultChart: nvidia/gpu-operator
+    defaultVersion: v25.3.3
+  nodeScheduling:
+    system:
+      nodeSelectorPaths:
+        - operator.nodeSelector
+        - node-feature-discovery.gc.nodeSelector
+        - node-feature-discovery.master.nodeSelector
+      tolerationPaths:
+        - operator.tolerations
+        - node-feature-discovery.gc.tolerations
+        - node-feature-discovery.master.tolerations
+    accelerated:
+      nodeSelectorPaths:
+        - daemonsets.nodeSelector
+        - node-feature-discovery.worker.nodeSelector
+      tolerationPaths:
+        - daemonsets.tolerations
+        - node-feature-discovery.worker.tolerations
 ```
 
 ### Node Selector and Toleration Handling
 
 The bundle command supports `--system-node-selector`, `--system-node-toleration`, `--accelerated-node-selector`, and `--accelerated-node-toleration` flags.
 
-**How it works with ComponentConfig**:
-1. Define paths in `ComponentConfig.*NodeSelectorPaths` and `*TolerationPaths`
-2. `MakeBundle()` automatically applies CLI values to those paths
-3. Templates render the values normally
+**How it works:**
+1. Paths are defined in `registry.yaml` under `nodeScheduling`
+2. The bundler automatically applies CLI flag values to those paths
+3. Values are written to the component's section in the umbrella chart's `values.yaml`
 
-**Bundler-specific paths** (defined in ComponentConfig):
-
-**GPU Operator**:
-- `SystemNodeSelectorPaths`: `operator.nodeSelector`, `node-feature-discovery.gc.nodeSelector`, `node-feature-discovery.master.nodeSelector`
-- `SystemTolerationPaths`: `operator.tolerations`, `node-feature-discovery.gc.tolerations`, `node-feature-discovery.master.tolerations`
-- `AcceleratedNodeSelectorPaths`: `daemonsets.nodeSelector`, `node-feature-discovery.worker.nodeSelector`
-- `AcceleratedTolerationPaths`: `daemonsets.tolerations`, `node-feature-discovery.worker.tolerations`
-
-**Cert-Manager**:
-- `SystemNodeSelectorPaths`: `nodeSelector`, `webhook.nodeSelector`, `cainjector.nodeSelector`, `startupapicheck.nodeSelector`
-- `SystemTolerationPaths`: `tolerations`, `webhook.tolerations`, `cainjector.tolerations`, `startupapicheck.tolerations`
-
-**Network Operator**:
-- No node selector/toleration paths configured (uses Helm defaults)
-
-### Error Handling
-
-Errors are handled automatically by `MakeBundle()`. For custom functions, use structured errors:
-
-```go
-// In CustomManifestFunc or MetadataFunc
-if err != nil {
-    return errors.Wrap(errors.ErrCodeInternal,
-        "failed to generate manifest", err)
-}
+**Example CLI usage:**
+```bash
+cnsctl bundle -r recipe.yaml \
+  --system-node-selector nodeGroup=system-pool \
+  --accelerated-node-selector nvidia.com/gpu.present=true \
+  -o ./bundles
 ```
+
+### Value Overrides
+
+Override component values at bundle generation time:
+
+```bash
+# Override GPU Operator driver version
+cnsctl bundle -r recipe.yaml --set gpuoperator:driver.version=580.82.07 -o ./bundles
+
+# Multiple overrides
+cnsctl bundle -r recipe.yaml \
+  --set gpuoperator:driver.version=580.82.07 \
+  --set gpuoperator:gds.enabled=true \
+  -o ./bundles
+```
+
+The prefix before `:` matches the component's `valueOverrideKeys` in the registry.
 
 ## Deployer Integration
 
@@ -366,4 +340,5 @@ See [CLI Architecture](cli.md#deployer-framework-gitops-integration) for detaile
 - [CLI Architecture](cli.md) - Deployer framework and GitOps integration
 - [CLI Reference](../user-guide/cli-reference.md) - Bundle generation commands
 - [API Reference](../integration/api-reference.md) - Programmatic access (recipe generation only)
-- [GPU Operator implementation](../../pkg/component/gpuoperator) - Reference example
+- [Component Registry](../../pkg/recipe/data/registry.yaml) - Declarative component configuration
+- [Recipe Data README](../../pkg/recipe/data/README.md) - Recipe and component data overview

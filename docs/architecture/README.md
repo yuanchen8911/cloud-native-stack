@@ -695,22 +695,22 @@ The Bundler Framework provides an extensible system for generating deployment bu
 
 ### Design Principles
 
-**1. Generic Bundler Framework (ComponentConfig + MakeBundle)**  
-**Rationale**: Declarative configuration; eliminate boilerplate; consistent implementation  
-**Implementation**: `ComponentConfig` struct defines component-specific settings; `MakeBundle()` handles all common steps  
-**Benefits**: ~50 lines per bundler; consistent error handling; built-in observability  
-**Components**: `internal.ComponentConfig`, `internal.MakeBundle()`, `internal.BundleMetadata`
+**1. Declarative Component Registry**
+**Rationale**: No Go code required for new components; configuration in YAML
+**Implementation**: Components defined in `pkg/recipe/data/registry.yaml`; bundler loads configuration automatically
+**Benefits**: Zero boilerplate; consistent configuration; easy to add new components
+**Components**: `recipe.ComponentRegistry`, `recipe.ComponentConfig`, `component.BaseBundler`
 
-**2. ComponentConfig Declarative Pattern**  
-**Pattern**: Define bundler behavior via struct configuration rather than procedural code  
-**Rationale**: Readable, testable, maintainable; easy to add new bundlers  
-**Implementation**: Required fields (Name, DisplayName, ValueOverrideKeys, TemplateGetter) plus optional extensions  
-**Extensions**: `MetadataFunc` for custom README metadata, `CustomManifestFunc` for additional K8s manifests
+**2. Registry-Based Configuration**
+**Pattern**: Define component behavior via YAML configuration in registry.yaml
+**Rationale**: Readable, testable, maintainable; no Go code for new components
+**Implementation**: Required fields (name, displayName) plus optional extensions (helm, nodeScheduling)
+**Extensions**: Custom manifest files in `components/<name>/manifests/` for additional K8s resources
 
-**3. BaseBundler Helper Pattern**  
-**Rationale**: Common file operations across all bundlers  
-**Implementation**: Struct embedding with methods (directory creation, file writing, template rendering, checksum generation)  
-**Reference**: [pkg/component/internal](../../pkg/component/internal)
+**3. BaseBundler Helper Pattern**
+**Rationale**: Common file operations across all bundlers
+**Implementation**: Struct embedding with methods (directory creation, file writing, template rendering, checksum generation)
+**Reference**: [pkg/component](../../pkg/component)
 
 **4. Registry Pattern**  
 **Rationale**: Decoupled bundler registration; extensibility without modifying core code  
@@ -810,94 +810,90 @@ type ComponentConfig struct {
 }
 ```
 
-### GPU Operator Bundler (Example)
+### GPU Operator Configuration (Example)
 
-**Implementation**: Uses ComponentConfig + MakeBundle pattern  
-**Code Size**: ~85 lines total (bundler.go)  
-**Output**: Helm values, README, manifests (via CustomManifestFunc), checksums
+**Implementation**: Declarative configuration in `pkg/recipe/data/registry.yaml`
+**Code Size**: Zero Go code required
+**Output**: Helm umbrella chart with GPU Operator as dependency
 
-**ComponentConfig Definition**:
-```go
-var componentConfig = internal.ComponentConfig{
-    Name:                  Name,
-    DisplayName:           "gpu-operator",
-    ValueOverrideKeys:     []string{"gpuoperator"},
-    DefaultHelmRepository: "https://helm.ngc.nvidia.com/nvidia",
-    DefaultHelmChart:      "nvidia/gpu-operator",
-    TemplateGetter:        GetTemplate,
-    SystemNodeSelectorPaths: []string{
-        "operator.nodeSelector",
-        "node-feature-discovery.gc.nodeSelector",
-        "node-feature-discovery.master.nodeSelector",
-    },
-    AcceleratedNodeSelectorPaths: []string{
-        "daemonsets.nodeSelector",
-        "node-feature-discovery.worker.nodeSelector",
-    },
-    CustomManifestFunc: generateCustomManifests, // DCGM exporter, kernel params
-}
-
-// Make delegates to generic MakeBundle function
-func (b *Bundler) Make(ctx context.Context, input recipe.RecipeInput, dir string) (*result.Result, error) {
-    return internal.MakeBundle(ctx, b.BaseBundler, input, dir, componentConfig)
-}
+**Registry Configuration** (`pkg/recipe/data/registry.yaml`):
+```yaml
+- name: gpu-operator
+  displayName: GPU Operator
+  valueOverrideKeys:
+    - gpuoperator
+  helm:
+    defaultRepository: https://helm.ngc.nvidia.com/nvidia
+    defaultChart: nvidia/gpu-operator
+    defaultVersion: v25.3.3
+  nodeScheduling:
+    system:
+      nodeSelectorPaths:
+        - operator.nodeSelector
+        - node-feature-discovery.gc.nodeSelector
+        - node-feature-discovery.master.nodeSelector
+      tolerationPaths:
+        - operator.tolerations
+    accelerated:
+      nodeSelectorPaths:
+        - daemonsets.nodeSelector
+        - node-feature-discovery.worker.nodeSelector
+      tolerationPaths:
+        - daemonsets.tolerations
 ```
 
-**Bundle Contents**:
+**Bundle Contents** (Helm umbrella chart):
 ```
-gpu-operator/
-├── values.yaml              # Helm chart values
-├── manifests/
-│   ├── dcgm-exporter.yaml           # Custom DCGM metrics (conditional)
-│   └── kernel-module-params.yaml    # Kernel parameters (GB200 only)
+bundle/
+├── Chart.yaml               # Umbrella chart with dependencies
+├── values.yaml              # Combined values for all components
 ├── README.md                # Deployment instructions
+├── recipe.yaml              # Copy of input recipe
+├── templates/               # Custom manifests (if any)
+│   └── dcgm-exporter.yaml   # DCGM metrics ConfigMap
 └── checksums.txt            # SHA256 checksums
 ```
 
-### Example: Adding a New Bundler with ComponentConfig
+### Example: Adding a New Component
 
-```go
-package mybundler
+Adding a new component requires only YAML configuration:
 
-import (
-    "context"
-    
-    "github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
-    "github.com/NVIDIA/cloud-native-stack/pkg/bundler/result"
-    "github.com/NVIDIA/cloud-native-stack/pkg/bundler/types"
-    "github.com/NVIDIA/cloud-native-stack/pkg/component/internal"
-    "github.com/NVIDIA/cloud-native-stack/pkg/recipe"
-)
-
-const Name = "my-bundler"
-
-// componentConfig defines all component-specific settings declaratively.
-var componentConfig = internal.ComponentConfig{
-    Name:                  Name,
-    DisplayName:           "My Bundler",
-    ValueOverrideKeys:     []string{"mybundler"},
-    DefaultHelmRepository: "https://charts.example.com",
-    DefaultHelmChart:      "example/my-bundler",
-    TemplateGetter:        GetTemplate,
-}
-
-// Bundler generates deployment bundles from RecipeInput.
-type Bundler struct {
-    *internal.BaseBundler
-}
-
-// NewBundler creates a new bundler instance.
-func NewBundler(cfg *config.Config) *Bundler {
-    return &Bundler{
-        BaseBundler: internal.NewBaseBundler(cfg, types.BundleTypeMyBundler),
-    }
-}
-
-// Make generates the bundle by delegating to the generic MakeBundle function.
-func (b *Bundler) Make(ctx context.Context, input recipe.RecipeInput, dir string) (*result.Result, error) {
-    return internal.MakeBundle(ctx, b.BaseBundler, input, dir, componentConfig)
-}
+**Step 1: Add to registry** (`pkg/recipe/data/registry.yaml`):
+```yaml
+- name: my-operator
+  displayName: My Operator
+  valueOverrideKeys:
+    - myoperator
+  helm:
+    defaultRepository: https://charts.example.com
+    defaultChart: example/my-operator
+    defaultVersion: v1.0.0
+  nodeScheduling:
+    system:
+      nodeSelectorPaths:
+        - operator.nodeSelector
 ```
+
+**Step 2: Create values file** (`pkg/recipe/data/components/my-operator/values.yaml`):
+```yaml
+operator:
+  replicas: 1
+  image:
+    repository: example/my-operator
+    tag: v1.0.0
+```
+
+**Step 3: Reference in recipe overlay** (`pkg/recipe/data/overlays/my-recipe.yaml`):
+```yaml
+componentRefs:
+  - name: my-operator
+    type: Helm
+    version: v1.0.0
+    source: https://charts.example.com
+    valuesFile: components/my-operator/values.yaml
+```
+
+No Go code is required. The bundler automatically loads the component configuration from the registry.
 
 ### Usage Example
 
@@ -906,41 +902,42 @@ package main
 
 import (
     "context"
+    "fmt"
     "github.com/NVIDIA/cloud-native-stack/pkg/bundler"
-    _ "github.com/NVIDIA/cloud-native-stack/pkg/component/gpuoperator"  // Auto-registers via init()
+    "github.com/NVIDIA/cloud-native-stack/pkg/recipe"
 )
 
 func main() {
     ctx := context.Background()
-    
-    // Load recipe
-    recipe := loadRecipe("recipe.yaml")
-    
-    // Create bundler with functional options
-    generator := bundler.NewDefaultBundler(
-        bundler.WithBundlerTypes([]bundler.BundleType{"gpu-operator"}),
-        bundler.WithFailFast(true),
-    )
-    
-    // Generate bundles (parallel execution)
-    results, err := generator.Make(ctx, recipe, "./output")
+
+    // Load recipe result
+    recipeResult, err := recipe.LoadFromFile("recipe.yaml")
     if err != nil {
         panic(err)
     }
-    
-    // Process results
-    for bundlerType, result := range results {
-        fmt.Printf("%s: %d files (%d bytes)\n", 
-            bundlerType, len(result.Files), result.TotalBytes)
+
+    // Create bundler
+    b, err := bundler.New()
+    if err != nil {
+        panic(err)
     }
+
+    // Generate umbrella chart
+    output, err := b.Make(ctx, recipeResult, "./output")
+    if err != nil {
+        panic(err)
+    }
+
+    fmt.Printf("Generated: %d files (%d bytes)\n",
+        output.TotalFiles, output.TotalSize)
 }
 ```
 
-**Auto-Registration via init()**:
-When you import a component package (e.g., `_ "github.com/NVIDIA/cloud-native-stack/pkg/component/gpuoperator"`), its `init()` function automatically registers the bundler with `MustRegister()`. No manual registration needed.
+**Declarative Configuration**:
+Components are configured in `pkg/recipe/data/registry.yaml`. The bundler automatically loads component configuration from the registry based on the recipe's `componentRefs`.
 
-**Parallel Execution by Default**:
-When `WithBundlerTypes` is omitted or empty, **all registered bundlers execute in parallel**. This enables automatic discovery - just import component packages and they're available.
+**Umbrella Chart Generation**:
+The bundler generates a Helm umbrella chart with all components as dependencies, using the combined values from each component's configuration.
 
 
 ### Metrics and Observability
@@ -985,34 +982,35 @@ bundler_validation_failures_total{bundler_type="gpu-operator"}
 ```go
 func TestBundler_Make(t *testing.T) {
     // Create harness with bundler name for directory verification
-    h := internal.NewTestHarness(t, "gpu-operator").
+    h := component.NewTestHarness(t, "gpu-operator").
         WithExpectedFiles([]string{"values.yaml", "README.md"})
 
     // Create bundler with test config
-    bundler := NewBundler(config.NewConfig())
+    b, _ := bundler.New()
 
     // Run test - automatically verifies result and files
-    h.TestMake(bundler)
+    h.TestMake(b)
 }
 
 func TestBundler_MakeWithRecipeResult(t *testing.T) {
-    h := internal.NewTestHarness(t, "gpu-operator").
-        WithExpectedFiles([]string{"values.yaml", "README.md"})
+    h := component.NewTestHarness(t, "gpu-operator").
+        WithExpectedFiles([]string{"Chart.yaml", "values.yaml", "README.md"})
 
-    bundler := NewBundler(config.NewConfig())
+    b, _ := bundler.New()
 
-    // Build a RecipeResult with component overrides
-    recipeResult := internal.NewRecipeResultBuilder().
-        WithComponentAndSource("gpu-operator", "v25.3.3",
-            "https://helm.ngc.nvidia.com/nvidia",
-            map[string]interface{}{
-                "driver": map[string]interface{}{
-                    "enabled": true,
-                },
-            }).
-        Build()
+    // Build a RecipeResult with component references
+    recipeResult := &recipe.RecipeResult{
+        ComponentRefs: []recipe.ComponentRef{
+            {
+                Name:    "gpu-operator",
+                Version: "v25.3.3",
+                Type:    "helm",
+                Source:  "https://helm.ngc.nvidia.com/nvidia",
+            },
+        },
+    }
 
-    h.TestMakeWithRecipeResult(bundler, recipeResult)
+    h.TestMakeWithRecipeResult(b, recipeResult)
 }
 ```
 

@@ -1,10 +1,117 @@
-package internal
+package component
 
 import (
 	"testing"
 
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
+	"github.com/NVIDIA/cloud-native-stack/pkg/recipe"
 )
+
+func TestEnrichConfigFromRegistry(t *testing.T) {
+	// Get registry to verify expected values
+	registry, err := recipe.GetComponentRegistry()
+	if err != nil {
+		t.Fatalf("failed to load component registry: %v", err)
+	}
+
+	t.Run("enriches empty config from registry", func(t *testing.T) {
+		// Start with minimal config (only Name)
+		cfg := ComponentConfig{
+			Name: "gpu-operator",
+		}
+
+		enrichConfigFromRegistry(&cfg)
+
+		// Verify values were populated from registry
+		comp := registry.Get("gpu-operator")
+		if comp == nil {
+			t.Fatal("gpu-operator not found in registry")
+		}
+
+		if cfg.DisplayName == "" {
+			t.Error("DisplayName should be populated from registry")
+		}
+		if cfg.DisplayName != comp.DisplayName {
+			t.Errorf("DisplayName = %q, want %q", cfg.DisplayName, comp.DisplayName)
+		}
+		if len(cfg.ValueOverrideKeys) == 0 {
+			t.Error("ValueOverrideKeys should be populated from registry")
+		}
+		if cfg.DefaultHelmRepository == "" {
+			t.Error("DefaultHelmRepository should be populated from registry")
+		}
+		if cfg.DefaultHelmChart == "" {
+			t.Error("DefaultHelmChart should be populated from registry")
+		}
+	})
+
+	t.Run("does not override existing values", func(t *testing.T) {
+		// Start with fully populated config
+		cfg := ComponentConfig{
+			Name:                    "gpu-operator",
+			DisplayName:             "Custom Display Name",
+			ValueOverrideKeys:       []string{"custom-key"},
+			DefaultHelmRepository:   "https://custom.repo",
+			DefaultHelmChart:        "custom/chart",
+			SystemNodeSelectorPaths: []string{"custom.path"},
+		}
+
+		enrichConfigFromRegistry(&cfg)
+
+		// Verify existing values were preserved
+		if cfg.DisplayName != "Custom Display Name" {
+			t.Errorf("DisplayName should be preserved, got %q", cfg.DisplayName)
+		}
+		if len(cfg.ValueOverrideKeys) != 1 || cfg.ValueOverrideKeys[0] != "custom-key" {
+			t.Errorf("ValueOverrideKeys should be preserved, got %v", cfg.ValueOverrideKeys)
+		}
+		if cfg.DefaultHelmRepository != "https://custom.repo" {
+			t.Errorf("DefaultHelmRepository should be preserved, got %q", cfg.DefaultHelmRepository)
+		}
+		if cfg.DefaultHelmChart != "custom/chart" {
+			t.Errorf("DefaultHelmChart should be preserved, got %q", cfg.DefaultHelmChart)
+		}
+		if len(cfg.SystemNodeSelectorPaths) != 1 || cfg.SystemNodeSelectorPaths[0] != "custom.path" {
+			t.Errorf("SystemNodeSelectorPaths should be preserved, got %v", cfg.SystemNodeSelectorPaths)
+		}
+	})
+
+	t.Run("unknown component is unchanged", func(t *testing.T) {
+		cfg := ComponentConfig{
+			Name:        "unknown-component",
+			DisplayName: "",
+		}
+
+		enrichConfigFromRegistry(&cfg)
+
+		// Verify nothing changed
+		if cfg.DisplayName != "" {
+			t.Errorf("DisplayName should remain empty for unknown component, got %q", cfg.DisplayName)
+		}
+	})
+
+	t.Run("enriches node scheduling paths", func(t *testing.T) {
+		cfg := ComponentConfig{
+			Name: "gpu-operator",
+		}
+
+		enrichConfigFromRegistry(&cfg)
+
+		// gpu-operator should have scheduling paths
+		if len(cfg.SystemNodeSelectorPaths) == 0 {
+			t.Error("SystemNodeSelectorPaths should be populated")
+		}
+		if len(cfg.SystemTolerationPaths) == 0 {
+			t.Error("SystemTolerationPaths should be populated")
+		}
+		if len(cfg.AcceleratedNodeSelectorPaths) == 0 {
+			t.Error("AcceleratedNodeSelectorPaths should be populated")
+		}
+		if len(cfg.AcceleratedTolerationPaths) == 0 {
+			t.Error("AcceleratedTolerationPaths should be populated")
+		}
+	})
+}
 
 func TestGenerateDefaultBundleMetadata(t *testing.T) {
 	tests := []struct {

@@ -1,4 +1,4 @@
-package internal
+package component
 
 // NewTemplateGetter creates a TemplateFunc from a map of template names to content.
 // This is used to simplify template handling in bundlers by converting embedded

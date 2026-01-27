@@ -8,8 +8,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-//go:embed data/base.yaml data/overlays/*.yaml data/components/*/*.yaml
+//go:embed data/base.yaml data/overlays/*.yaml data/registry.yaml data/components/*/*.yaml data/components/*/manifests/*.yaml
 var dataFS embed.FS
+
+// GetManifestContent retrieves a manifest file from embedded data.
+// Path should be relative to data directory (e.g., "components/gpu-operator/manifests/dcgm-exporter.yaml").
+func GetManifestContent(path string) ([]byte, error) {
+	fullPath := "data/" + path
+	return dataFS.ReadFile(fullPath)
+}
 
 // RecipeInput is an interface that both Recipe and RecipeResult implement.
 // This allows bundlers to work with either format during the transition period.

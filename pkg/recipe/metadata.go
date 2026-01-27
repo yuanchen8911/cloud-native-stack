@@ -53,6 +53,11 @@ type ComponentRef struct {
 
 	// DependencyRefs is a list of component names this component depends on.
 	DependencyRefs []string `json:"dependencyRefs,omitempty" yaml:"dependencyRefs,omitempty"`
+
+	// ManifestFiles lists Helm template files to include in the umbrella chart.
+	// Paths are relative to the data directory.
+	// Example: ["components/gpu-operator/manifests/dcgm-exporter.yaml"]
+	ManifestFiles []string `json:"manifestFiles,omitempty" yaml:"manifestFiles,omitempty"`
 }
 
 // RecipeMetadataSpec contains the specification for a recipe.
@@ -252,6 +257,19 @@ func mergeComponentRef(base, overlay ComponentRef) ComponentRef {
 	// DependencyRefs: overlay replaces if set
 	if len(overlay.DependencyRefs) > 0 {
 		result.DependencyRefs = overlay.DependencyRefs
+	}
+
+	// ManifestFiles: additive merge (base + overlay, deduplicated)
+	if len(overlay.ManifestFiles) > 0 {
+		seen := make(map[string]bool)
+		for _, f := range result.ManifestFiles {
+			seen[f] = true
+		}
+		for _, f := range overlay.ManifestFiles {
+			if !seen[f] {
+				result.ManifestFiles = append(result.ManifestFiles, f)
+			}
+		}
 	}
 
 	return result

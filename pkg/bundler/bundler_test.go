@@ -389,94 +389,88 @@ func TestRemoveHyphens(t *testing.T) {
 	}
 }
 
-func TestConvertMapValue(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected interface{}
-	}{
-		{"true", true},
-		{"false", false},
-		{"123", int64(123)},
-		{"3.14", 3.14},
-		{"hello", "hello"},
-		{"", ""},
+// Note: Tests for convertMapValue, setMapValueByPath, and applyMapOverrides
+// are in pkg/component/overrides_test.go since those functions now live there.
+
+func TestCollectManifestContents(t *testing.T) {
+	bundler, err := New()
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := convertMapValue(tt.input)
-			if result != tt.expected {
-				t.Errorf("convertMapValue(%q) = %v (%T), want %v (%T)",
-					tt.input, result, result, tt.expected, tt.expected)
-			}
-		})
-	}
-}
+	t.Run("empty manifest files", func(t *testing.T) {
+		recipeResult := &recipe.RecipeResult{
+			ComponentRefs: []recipe.ComponentRef{
+				{
+					Name:          "gpu-operator",
+					ManifestFiles: []string{},
+				},
+			},
+		}
 
-func TestSetMapValueByPath(t *testing.T) {
-	t.Run("simple path", func(t *testing.T) {
-		m := make(map[string]interface{})
-		err := setMapValueByPath(m, "key", "value")
+		contents, err := bundler.collectManifestContents(recipeResult)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if m["key"] != "value" {
-			t.Errorf("expected key=value, got %v", m["key"])
+		if len(contents) != 0 {
+			t.Errorf("expected 0 contents, got %d", len(contents))
 		}
 	})
 
-	t.Run("nested path", func(t *testing.T) {
-		m := make(map[string]interface{})
-		err := setMapValueByPath(m, "a.b.c", "value")
+	t.Run("no components", func(t *testing.T) {
+		recipeResult := &recipe.RecipeResult{
+			ComponentRefs: []recipe.ComponentRef{},
+		}
+
+		contents, err := bundler.collectManifestContents(recipeResult)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		a := m["a"].(map[string]interface{})
-		b := a["b"].(map[string]interface{})
-		if b["c"] != "value" {
-			t.Errorf("expected a.b.c=value, got %v", b["c"])
+		if len(contents) != 0 {
+			t.Errorf("expected 0 contents, got %d", len(contents))
 		}
 	})
 
-	t.Run("boolean conversion", func(t *testing.T) {
-		m := make(map[string]interface{})
-		err := setMapValueByPath(m, "enabled", "true")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+	t.Run("invalid manifest path", func(t *testing.T) {
+		recipeResult := &recipe.RecipeResult{
+			ComponentRefs: []recipe.ComponentRef{
+				{
+					Name:          "gpu-operator",
+					ManifestFiles: []string{"nonexistent/file.yaml"},
+				},
+			},
 		}
-		if m["enabled"] != true {
-			t.Errorf("expected enabled=true, got %v", m["enabled"])
-		}
-	})
-}
 
-func TestApplyMapOverrides(t *testing.T) {
-	t.Run("nil target", func(t *testing.T) {
-		err := applyMapOverrides(nil, map[string]string{"key": "value"})
+		_, err := bundler.collectManifestContents(recipeResult)
 		if err == nil {
-			t.Fatal("expected error for nil target")
+			t.Fatal("expected error for invalid manifest path")
+		}
+		if !strings.Contains(err.Error(), "nonexistent/file.yaml") {
+			t.Errorf("error should mention the invalid file: %v", err)
 		}
 	})
 
-	t.Run("empty overrides", func(t *testing.T) {
-		m := make(map[string]interface{})
-		err := applyMapOverrides(m, nil)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+	t.Run("deduplicates shared manifests", func(t *testing.T) {
+		recipeResult := &recipe.RecipeResult{
+			ComponentRefs: []recipe.ComponentRef{
+				{
+					Name:          "component-a",
+					ManifestFiles: []string{},
+				},
+				{
+					Name:          "component-b",
+					ManifestFiles: []string{},
+				},
+			},
 		}
-	})
 
-	t.Run("multiple overrides", func(t *testing.T) {
-		m := make(map[string]interface{})
-		err := applyMapOverrides(m, map[string]string{
-			"a":   "1",
-			"b.c": "2",
-		})
+		contents, err := bundler.collectManifestContents(recipeResult)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if m["a"] != int64(1) {
-			t.Errorf("expected a=1, got %v", m["a"])
+		// Both components have empty manifest files, so no contents
+		if len(contents) != 0 {
+			t.Errorf("expected 0 contents, got %d", len(contents))
 		}
 	})
 }

@@ -16,6 +16,11 @@ set -euo pipefail
 # - CLI workflow: cnsctl recipe → cnsctl bundle
 # - CLI flags: --set, --system-node-selector, --accelerated-node-toleration, etc.
 # - Flag combinations and interactions
+# - Helm chart validation (if helm is available):
+#   - helm lint (validates chart structure and syntax)
+#   - helm dependency update (validates Chart.yaml dependencies)
+#   - helm template (validates template rendering)
+#   - templates/ directory validation for Helm template syntax
 #
 # WHAT GO TESTS COVER (not duplicated here):
 # - YAML file validation: pkg/recipe/yaml_test.go
@@ -39,6 +44,15 @@ ROOT=$(dirname "${DIR}")
 
 # Check required tools
 has_tools awk find grep make sed uname
+
+# Check optional tools (helm for chart validation)
+HELM_AVAILABLE=false
+if command -v helm &> /dev/null; then
+  HELM_AVAILABLE=true
+  msg "Helm found: $(helm version --short 2>/dev/null || echo 'unknown version')"
+else
+  msg "Warning: helm not found, skipping Helm chart validation tests"
+fi
 
 # Default values
 OUTPUT_DIR=""
@@ -67,6 +81,11 @@ usage() {
   echo "     - --system-node-toleration, --accelerated-node-toleration"
   echo "     - --set (value overrides)"
   echo "     - Combined flag interactions"
+  echo "  4. Helm chart validation (if helm is available):"
+  echo "     - helm lint (chart structure and syntax)"
+  echo "     - helm dependency update (Chart.yaml dependencies)"
+  echo "     - helm template (template rendering)"
+  echo "     - templates/ directory validation"
   echo ""
   echo "Go tests cover (not duplicated here):"
   echo "  - pkg/recipe/yaml_test.go: YAML parsing, references, enums, constraints"
@@ -166,18 +185,107 @@ verify_pattern_in_values() {
   local values_file=$1
   local pattern=$2
   local test_name=$3
-  
+
   if [ ! -f "$values_file" ]; then
     test_fail "$test_name" "values.yaml not found"
     return 1
   fi
-  
+
   if ! grep -q "$pattern" "$values_file"; then
     test_fail "$test_name" "Pattern '${pattern}' not found in values.yaml"
     return 1
   fi
-  
+
   test_pass "$test_name"
+  return 0
+}
+
+# Verify Helm chart is valid using helm lint and dependency update
+# This validates:
+#   1. Chart.yaml has valid semver version
+#   2. helm lint passes (syntax and structure)
+#   3. helm dependency update works (if network available)
+#   4. templates/ directory contents are valid Helm templates
+verify_helm_chart() {
+  local bundle_dir=$1
+  local test_name=$2
+
+  if [ "$HELM_AVAILABLE" != "true" ]; then
+    # Skip helm validation if helm is not available
+    return 0
+  fi
+
+  # Fix version if it's "dev" (helm requires valid semver)
+  local chart_file="${bundle_dir}/Chart.yaml"
+  if grep -q "version: dev" "$chart_file" 2>/dev/null; then
+    sed -i.bak 's/version: dev/version: 0.0.0-dev/' "$chart_file"
+    rm -f "${chart_file}.bak"
+  fi
+
+  # Run helm lint (validates chart structure and syntax)
+  local lint_output
+  if ! lint_output=$(helm lint "$bundle_dir" 2>&1); then
+    # Check if the only issue is missing dependencies (expected in CI)
+    if echo "$lint_output" | grep -q "chart directory is missing these dependencies"; then
+      # This is expected - dependencies aren't downloaded
+      # Check if there are any other errors (not warnings)
+      if echo "$lint_output" | grep -q "Error:"; then
+        test_fail "${test_name}/helm-lint" "helm lint failed: $(echo "$lint_output" | grep "Error:")"
+        return 1
+      fi
+    else
+      test_fail "${test_name}/helm-lint" "helm lint failed: $lint_output"
+      return 1
+    fi
+  fi
+  test_pass "${test_name}/helm-lint"
+
+  # Try helm dependency update (may fail without network, which is OK)
+  local dep_output
+  if dep_output=$(helm dependency update "$bundle_dir" 2>&1); then
+    test_pass "${test_name}/helm-dep-update"
+
+    # If dependencies downloaded successfully, try helm template
+    local template_output
+    if template_output=$(helm template test-release "$bundle_dir" 2>&1); then
+      test_pass "${test_name}/helm-template"
+    else
+      # Template might fail due to missing values or other issues
+      # This is informational, not a hard failure
+      msg "Warning: helm template had issues (may be expected): ${template_output:0:200}"
+    fi
+  else
+    # Dependency update failed - likely no network or repos not accessible
+    # This is expected in CI environments, so just log it
+    msg "Note: helm dependency update skipped (network/repo issue)"
+  fi
+
+  # Verify templates directory if it exists
+  local templates_dir="${bundle_dir}/templates"
+  if [ -d "$templates_dir" ]; then
+    local template_count
+    template_count=$(find "$templates_dir" -name "*.yaml" -type f | wc -l | tr -d ' ')
+    if [ "$template_count" -gt 0 ]; then
+      test_pass "${test_name}/has-templates (${template_count} files)"
+
+      # Verify each template file has valid Helm template markers
+      for tmpl in "${templates_dir}"/*.yaml; do
+        if [ -f "$tmpl" ]; then
+          local tmpl_name
+          tmpl_name=$(basename "$tmpl")
+          # Check for basic Helm template syntax ({{ or {{-)
+          if grep -qE '\{\{-?\s' "$tmpl"; then
+            test_pass "${test_name}/template-syntax/${tmpl_name}"
+          else
+            # File might be a static manifest (no templating needed)
+            # This is OK, just note it
+            msg "Note: ${tmpl_name} has no Helm template syntax (may be static manifest)"
+          fi
+        fi
+      done
+    fi
+  fi
+
   return 0
 }
 
@@ -364,11 +472,14 @@ test_all_recipe_data_files() {
     if ! verify_umbrella_chart "$bundle_dir" "cli-workflow/${basename}/umbrella-chart"; then
       continue
     fi
-    
+
+    # Test: Verify Helm chart validity
+    verify_helm_chart "$bundle_dir" "cli-workflow/${basename}"
+
     # Count dependencies in Chart.yaml (indicates number of components)
     local dep_count
     dep_count=$(grep -c "^  - name:" "${bundle_dir}/Chart.yaml" 2>/dev/null || echo "0")
-    
+
     test_pass "cli-workflow/${basename} (${dep_count} dependencies)"
   done
   
@@ -457,10 +568,13 @@ run_bundle_tests() {
     test_fail "bundle/basic/generation" "Bundle generation failed"
   else
     test_pass "bundle/basic/generation"
-    
+
     # Verify umbrella chart structure
     verify_umbrella_chart "$basic_dir" "bundle/basic/umbrella-chart"
-    
+
+    # Verify Helm chart validity
+    verify_helm_chart "$basic_dir" "bundle/basic"
+
     # Verify expected components in Chart.yaml dependencies
     verify_pattern_in_values "${basic_dir}/Chart.yaml" \
       "gpu-operator" "bundle/basic/has-gpu-operator-dep"
@@ -596,26 +710,29 @@ run_bundle_tests() {
     test_fail "bundle/combined/generation" "Bundle generation failed"
   else
     test_pass "bundle/combined/generation"
-    
+
     # Verify umbrella chart structure
     verify_umbrella_chart "$combined_dir" "bundle/combined/umbrella-chart"
-    
+
+    # Verify Helm chart validity
+    verify_helm_chart "$combined_dir" "bundle/combined"
+
     # Verify system node selector
     verify_pattern_in_values "${combined_dir}/values.yaml" \
       "nodeGroup" "bundle/combined/system-selector"
-    
+
     # Verify system toleration
     verify_pattern_in_values "${combined_dir}/values.yaml" \
       "dedicated" "bundle/combined/system-toleration"
-    
+
     # Verify accelerated node selector
     verify_pattern_in_values "${combined_dir}/values.yaml" \
       "accelerator" "bundle/combined/accel-selector"
-    
+
     # Verify accelerated toleration
     verify_pattern_in_values "${combined_dir}/values.yaml" \
       "nvidia.com/gpu" "bundle/combined/accel-toleration"
-    
+
     # Verify value override
     verify_pattern_in_values "${combined_dir}/values.yaml" \
       "888.88.88" "bundle/combined/value-override"

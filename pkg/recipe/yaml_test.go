@@ -33,7 +33,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/types"
 	"gopkg.in/yaml.v3"
 )
 
@@ -282,14 +281,19 @@ func TestAllDependencyReferencesExist(t *testing.T) {
 }
 
 // TestAllComponentNamesMatchKnownComponents verifies that all component names
-// in recipes match known bundler types.
+// in recipes match known components from the component registry.
 func TestAllComponentNamesMatchKnownComponents(t *testing.T) {
 	files := collectMetadataFiles(t)
 
-	// Get all supported bundle types
-	supportedTypes := make(map[string]bool)
-	for _, bt := range types.SupportedTypes() {
-		supportedTypes[bt.String()] = true
+	// Get all supported component names from the registry
+	registry, err := GetComponentRegistry()
+	if err != nil {
+		t.Fatalf("failed to load component registry: %v", err)
+	}
+
+	supportedComponents := make(map[string]bool)
+	for _, name := range registry.Names() {
+		supportedComponents[name] = true
 	}
 
 	for _, path := range files {
@@ -305,9 +309,9 @@ func TestAllComponentNamesMatchKnownComponents(t *testing.T) {
 			}
 
 			for _, comp := range metadata.Spec.ComponentRefs {
-				if !supportedTypes[comp.Name] {
-					t.Errorf("componentRef uses unknown component name %q; valid types: %v",
-						comp.Name, getKeys(supportedTypes))
+				if !supportedComponents[comp.Name] {
+					t.Errorf("componentRef uses unknown component name %q; valid components: %v",
+						comp.Name, registry.Names())
 				}
 			}
 		})

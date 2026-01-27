@@ -10,17 +10,15 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
-	corev1 "k8s.io/api/core/v1"
 
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/deployer/argocd"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/deployer/helm"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/result"
+	"github.com/NVIDIA/cloud-native-stack/pkg/component"
 	"github.com/NVIDIA/cloud-native-stack/pkg/errors"
 	"github.com/NVIDIA/cloud-native-stack/pkg/recipe"
 )
@@ -164,6 +162,13 @@ func (b *DefaultBundler) makeUmbrellaChart(ctx context.Context, recipeResult *re
 		"output_dir", dir,
 	)
 
+	// Collect manifest contents from components
+	manifestContents, err := b.collectManifestContents(recipeResult)
+	if err != nil {
+		return nil, errors.Wrap(errors.ErrCodeInternal,
+			"failed to collect manifest contents", err)
+	}
+
 	// Generate umbrella chart
 	generator := helm.NewGenerator()
 	generatorInput := &helm.GeneratorInput{
@@ -171,6 +176,7 @@ func (b *DefaultBundler) makeUmbrellaChart(ctx context.Context, recipeResult *re
 		ComponentValues:  componentValues,
 		Version:          b.Config.Version(),
 		IncludeChecksums: b.Config.IncludeChecksums(),
+		ManifestContents: manifestContents,
 	}
 
 	output, err := generator.Generate(ctx, generatorInput, dir)
@@ -302,7 +308,7 @@ func (b *DefaultBundler) extractComponentValues(ctx context.Context, recipeResul
 
 		// Apply user value overrides from --set flags
 		if overrides := b.getValueOverridesForComponent(ref.Name); len(overrides) > 0 {
-			if applyErr := applyMapOverrides(values, overrides); applyErr != nil {
+			if applyErr := component.ApplyMapOverrides(values, overrides); applyErr != nil {
 				slog.Warn("failed to apply some value overrides",
 					"component", ref.Name,
 					"error", applyErr,
@@ -320,7 +326,7 @@ func (b *DefaultBundler) extractComponentValues(ctx context.Context, recipeResul
 }
 
 // getValueOverridesForComponent returns value overrides for a specific component.
-// Checks for both hyphenated (gpu-operator) and non-hyphenated (gpuoperator) keys.
+// Uses the component registry to match both exact names and alternative override keys.
 func (b *DefaultBundler) getValueOverridesForComponent(componentName string) map[string]string {
 	if b.Config == nil {
 		return nil
@@ -331,15 +337,33 @@ func (b *DefaultBundler) getValueOverridesForComponent(componentName string) map
 		return nil
 	}
 
-	// Check exact name
+	// Check exact name first
 	if overrides, ok := allOverrides[componentName]; ok {
 		return overrides
 	}
 
-	// Check non-hyphenated version (e.g., gpuoperator for gpu-operator)
-	nonHyphenated := removeHyphens(componentName)
-	if nonHyphenated != componentName {
-		if overrides, ok := allOverrides[nonHyphenated]; ok {
+	// Use component registry to find component by any override key
+	registry, err := recipe.GetComponentRegistry()
+	if err != nil {
+		// Fall back to non-hyphenated check if registry fails
+		nonHyphenated := removeHyphens(componentName)
+		if nonHyphenated != componentName {
+			if overrides, ok := allOverrides[nonHyphenated]; ok {
+				return overrides
+			}
+		}
+		return nil
+	}
+
+	// Get the component config to access its value override keys
+	comp := registry.Get(componentName)
+	if comp == nil {
+		return nil
+	}
+
+	// Check each alternative override key
+	for _, key := range comp.ValueOverrideKeys {
+		if overrides, ok := allOverrides[key]; ok {
 			return overrides
 		}
 	}
@@ -348,60 +372,53 @@ func (b *DefaultBundler) getValueOverridesForComponent(componentName string) map
 }
 
 // applyNodeSchedulingOverrides applies node selectors and tolerations to component values.
-// Different components use different paths for these settings.
+// Uses the component registry to determine the correct paths for each component.
 func (b *DefaultBundler) applyNodeSchedulingOverrides(componentName string, values map[string]interface{}) {
 	if b.Config == nil {
 		return
 	}
 
-	// Define component-specific paths for node scheduling
-	type schedulingPaths struct {
-		systemNodeSelector      []string
-		systemTolerations       []string
-		acceleratedNodeSelector []string
-		acceleratedTolerations  []string
+	// Get component configuration from registry
+	registry, err := recipe.GetComponentRegistry()
+	if err != nil {
+		slog.Debug("failed to load component registry for node scheduling",
+			"error", err,
+			"component", componentName,
+		)
+		return
 	}
 
-	componentPaths := map[string]schedulingPaths{
-		"gpu-operator": {
-			systemNodeSelector:      []string{"operator.nodeSelector", "node-feature-discovery.gc.nodeSelector", "node-feature-discovery.master.nodeSelector"},
-			systemTolerations:       []string{"operator.tolerations", "node-feature-discovery.gc.tolerations", "node-feature-discovery.master.tolerations"},
-			acceleratedNodeSelector: []string{"daemonsets.nodeSelector", "node-feature-discovery.worker.nodeSelector"},
-			acceleratedTolerations:  []string{"daemonsets.tolerations", "node-feature-discovery.worker.tolerations"},
-		},
-		"network-operator": {
-			systemNodeSelector:      []string{"operator.nodeSelector"},
-			acceleratedNodeSelector: []string{"daemonsets.nodeSelector"},
-		},
-		"cert-manager": {
-			systemNodeSelector: []string{"controller.nodeSelector"},
-			systemTolerations:  []string{"controller.tolerations"},
-		},
-	}
-
-	paths, ok := componentPaths[componentName]
-	if !ok {
+	comp := registry.Get(componentName)
+	if comp == nil {
 		return // Unknown component, skip
 	}
 
 	// Apply system node selector
-	if nodeSelector := b.Config.SystemNodeSelector(); len(nodeSelector) > 0 && len(paths.systemNodeSelector) > 0 {
-		applyNodeSelectorOverrides(values, nodeSelector, paths.systemNodeSelector...)
+	if nodeSelector := b.Config.SystemNodeSelector(); len(nodeSelector) > 0 {
+		if paths := comp.GetSystemNodeSelectorPaths(); len(paths) > 0 {
+			component.ApplyNodeSelectorOverrides(values, nodeSelector, paths...)
+		}
 	}
 
 	// Apply system tolerations
-	if tolerations := b.Config.SystemNodeTolerations(); len(tolerations) > 0 && len(paths.systemTolerations) > 0 {
-		applyTolerationsOverrides(values, tolerations, paths.systemTolerations...)
+	if tolerations := b.Config.SystemNodeTolerations(); len(tolerations) > 0 {
+		if paths := comp.GetSystemTolerationPaths(); len(paths) > 0 {
+			component.ApplyTolerationsOverrides(values, tolerations, paths...)
+		}
 	}
 
 	// Apply accelerated node selector
-	if nodeSelector := b.Config.AcceleratedNodeSelector(); len(nodeSelector) > 0 && len(paths.acceleratedNodeSelector) > 0 {
-		applyNodeSelectorOverrides(values, nodeSelector, paths.acceleratedNodeSelector...)
+	if nodeSelector := b.Config.AcceleratedNodeSelector(); len(nodeSelector) > 0 {
+		if paths := comp.GetAcceleratedNodeSelectorPaths(); len(paths) > 0 {
+			component.ApplyNodeSelectorOverrides(values, nodeSelector, paths...)
+		}
 	}
 
 	// Apply accelerated tolerations
-	if tolerations := b.Config.AcceleratedNodeTolerations(); len(tolerations) > 0 && len(paths.acceleratedTolerations) > 0 {
-		applyTolerationsOverrides(values, tolerations, paths.acceleratedTolerations...)
+	if tolerations := b.Config.AcceleratedNodeTolerations(); len(tolerations) > 0 {
+		if paths := comp.GetAcceleratedTolerationPaths(); len(paths) > 0 {
+			component.ApplyTolerationsOverrides(values, tolerations, paths...)
+		}
 	}
 }
 
@@ -432,162 +449,24 @@ func removeHyphens(s string) string {
 	return string(result)
 }
 
-// applyMapOverrides applies overrides to a map[string]interface{} using dot-notation paths.
-// Handles nested maps by traversing the path segments and creating nested maps as needed.
-func applyMapOverrides(target map[string]interface{}, overrides map[string]string) error {
-	if target == nil {
-		return fmt.Errorf("target map cannot be nil")
-	}
+// collectManifestContents gathers manifest file contents from all components.
+func (b *DefaultBundler) collectManifestContents(recipeResult *recipe.RecipeResult) (map[string][]byte, error) {
+	contents := make(map[string][]byte)
 
-	if len(overrides) == 0 {
-		return nil
-	}
-
-	var errs []string
-	for path, value := range overrides {
-		if err := setMapValueByPath(target, path, value); err != nil {
-			errs = append(errs, fmt.Sprintf("%s=%s: %v", path, value, err))
-		}
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("failed to apply map overrides: %s", strings.Join(errs, "; "))
-	}
-
-	return nil
-}
-
-// setMapValueByPath sets a value in a nested map using dot-notation path.
-// Creates nested maps as needed. Converts string values to bools/numbers when appropriate.
-func setMapValueByPath(target map[string]interface{}, path, value string) error {
-	parts := strings.Split(path, ".")
-	current := target
-
-	// Traverse/create the path up to the last segment
-	for i := 0; i < len(parts)-1; i++ {
-		part := parts[i]
-		if next, ok := current[part]; ok {
-			// If the value exists, it must be a map
-			if nextMap, ok := next.(map[string]interface{}); ok {
-				current = nextMap
-			} else {
-				return fmt.Errorf("path segment %q exists but is not a map (type: %T)", part, next)
+	for _, ref := range recipeResult.ComponentRefs {
+		for _, manifestPath := range ref.ManifestFiles {
+			if _, exists := contents[manifestPath]; exists {
+				continue // Already loaded (could be shared across components)
 			}
-		} else {
-			// Create a new nested map
-			newMap := make(map[string]interface{})
-			current[part] = newMap
-			current = newMap
-		}
-	}
 
-	// Set the final value
-	lastPart := parts[len(parts)-1]
-	current[lastPart] = convertMapValue(value)
-
-	return nil
-}
-
-// convertMapValue converts a string value to an appropriate Go type.
-// Handles bools ("true"/"false") and numbers.
-func convertMapValue(value string) interface{} {
-	// Try bool conversion
-	if value == "true" {
-		return true
-	}
-	if value == "false" {
-		return false
-	}
-
-	// Try integer conversion
-	if i, err := strconv.ParseInt(value, 10, 64); err == nil {
-		return i
-	}
-
-	// Try float conversion
-	if f, err := strconv.ParseFloat(value, 64); err == nil {
-		return f
-	}
-
-	// Return as string
-	return value
-}
-
-// applyNodeSelectorOverrides applies node selector values to the specified paths in a values map.
-func applyNodeSelectorOverrides(values map[string]interface{}, nodeSelector map[string]string, paths ...string) {
-	if len(nodeSelector) == 0 || len(paths) == 0 {
-		return
-	}
-
-	for _, path := range paths {
-		// Convert node selector to interface map for YAML compatibility
-		selectorMap := make(map[string]interface{})
-		for k, v := range nodeSelector {
-			selectorMap[k] = v
-		}
-		_ = setMapValueByPath(values, path, "")
-		setNestedMapValue(values, path, selectorMap)
-	}
-}
-
-// applyTolerationsOverrides applies tolerations to the specified paths in a values map.
-func applyTolerationsOverrides(values map[string]interface{}, tolerations []corev1.Toleration, paths ...string) {
-	if len(tolerations) == 0 || len(paths) == 0 {
-		return
-	}
-
-	// Convert tolerations to interface slice
-	tolerationsList := make([]interface{}, 0, len(tolerations))
-	for _, t := range tolerations {
-		tolMap := make(map[string]interface{})
-		if t.Key != "" {
-			tolMap["key"] = t.Key
-		}
-		if t.Operator != "" {
-			tolMap["operator"] = string(t.Operator)
-		}
-		if t.Value != "" {
-			tolMap["value"] = t.Value
-		}
-		if t.Effect != "" {
-			tolMap["effect"] = string(t.Effect)
-		}
-		if t.TolerationSeconds != nil {
-			tolMap["tolerationSeconds"] = *t.TolerationSeconds
-		}
-		tolerationsList = append(tolerationsList, tolMap)
-	}
-
-	for _, path := range paths {
-		setNestedMapValue(values, path, tolerationsList)
-	}
-}
-
-// setNestedMapValue sets a value at a nested path in a map.
-func setNestedMapValue(target map[string]interface{}, path string, value interface{}) {
-	parts := strings.Split(path, ".")
-	current := target
-
-	// Traverse/create the path up to the last segment
-	for i := 0; i < len(parts)-1; i++ {
-		part := parts[i]
-		if next, ok := current[part]; ok {
-			if nextMap, ok := next.(map[string]interface{}); ok {
-				current = nextMap
-			} else {
-				// Existing value is not a map, create new map
-				newMap := make(map[string]interface{})
-				current[part] = newMap
-				current = newMap
+			content, err := recipe.GetManifestContent(manifestPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load manifest %s for component %s: %w",
+					manifestPath, ref.Name, err)
 			}
-		} else {
-			newMap := make(map[string]interface{})
-			current[part] = newMap
-			current = newMap
+			contents[manifestPath] = content
 		}
 	}
 
-	// Set the final value
-	lastPart := parts[len(parts)-1]
-	current[lastPart] = value
+	return contents, nil
 }

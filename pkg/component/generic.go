@@ -1,4 +1,4 @@
-package internal
+package component
 
 import (
 	"context"
@@ -133,15 +133,67 @@ func GenerateBundleMetadataWithExtensions(config map[string]string, cfg Componen
 	return meta
 }
 
+// enrichConfigFromRegistry enriches a ComponentConfig with values from the component registry.
+// This allows bundlers to omit fields that are already defined in the registry.
+func enrichConfigFromRegistry(cfg *ComponentConfig) {
+	registry, err := recipe.GetComponentRegistry()
+	if err != nil {
+		slog.Debug("component registry not available, using bundler config as-is",
+			"component", cfg.Name,
+			"error", err,
+		)
+		return
+	}
+
+	comp := registry.Get(cfg.Name)
+	if comp == nil {
+		return // Component not in registry, use bundler config
+	}
+
+	// Fill in missing values from registry
+	if cfg.DisplayName == "" {
+		cfg.DisplayName = comp.DisplayName
+	}
+	if len(cfg.ValueOverrideKeys) == 0 {
+		cfg.ValueOverrideKeys = comp.ValueOverrideKeys
+	}
+	if len(cfg.SystemNodeSelectorPaths) == 0 {
+		cfg.SystemNodeSelectorPaths = comp.GetSystemNodeSelectorPaths()
+	}
+	if len(cfg.SystemTolerationPaths) == 0 {
+		cfg.SystemTolerationPaths = comp.GetSystemTolerationPaths()
+	}
+	if len(cfg.AcceleratedNodeSelectorPaths) == 0 {
+		cfg.AcceleratedNodeSelectorPaths = comp.GetAcceleratedNodeSelectorPaths()
+	}
+	if len(cfg.AcceleratedTolerationPaths) == 0 {
+		cfg.AcceleratedTolerationPaths = comp.GetAcceleratedTolerationPaths()
+	}
+	if cfg.DefaultHelmRepository == "" {
+		cfg.DefaultHelmRepository = comp.Helm.DefaultRepository
+	}
+	if cfg.DefaultHelmChart == "" {
+		cfg.DefaultHelmChart = comp.Helm.DefaultChart
+	}
+	if cfg.DefaultHelmChartVersion == "" {
+		cfg.DefaultHelmChartVersion = comp.Helm.DefaultVersion
+	}
+}
+
 // MakeBundle generates a bundle using the generic bundling logic.
 // This function handles the common steps: creating directories, applying overrides,
 // writing values.yaml, generating README, generating checksums, and finalizing.
+// Configuration is enriched from the component registry when values are not
+// explicitly set in the ComponentConfig.
 func MakeBundle(ctx context.Context, b *BaseBundler, input recipe.RecipeInput, outputDir string, cfg ComponentConfig) (*result.Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, errors.Wrap(errors.ErrCodeTimeout, "context cancelled", err)
 	}
 
 	start := time.Now()
+
+	// Enrich config from registry (fills in missing values)
+	enrichConfigFromRegistry(&cfg)
 
 	slog.Debug("generating bundle",
 		"component", cfg.Name,
