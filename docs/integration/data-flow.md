@@ -577,14 +577,11 @@ After bundlers generate artifacts, the deployer framework transforms them into d
 │  ┌────────────────────▼────────────────────┐           │
 │  │ Deployer Selection (--deployer flag)    │           │
 │  │                                         │           │
-│  │ ├─ script (default)                     │           │
-│  │ │   └─ Shell scripts + README           │           │
+│  │ ├─ helm (default)                       │           │
+│  │ │   └─ Helm charts + README             │           │
 │  │ │                                       │           │
-│  │ ├─ argocd                               │           │
-│  │ │   └─ ArgoCD Application + sync-wave   │           │
-│  │ │                                       │           │
-│  │ └─ flux                                 │           │
-│  │     └─ HelmRelease + dependsOn          │           │
+│  │ └─ argocd                               │           │
+│  │     └─ ArgoCD Application + sync-wave   │           │
 │  └─────────────────────────────────────────┘           │
 │                                                        │
 └────────────────────────────────────────────────────────┘

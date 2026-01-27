@@ -273,9 +273,8 @@ flowchart LR
 
     subgraph "Deployer Output"
         O1[ArgoCD Applications]
-        O2[Flux HelmReleases]
-        O3[Helm Charts]
-        O4[README.md]
+        O2[Helm Charts]
+        O3[README.md]
     end
 ```
 
@@ -285,9 +284,8 @@ Deployers respect the `deploymentOrder` field from the recipe to ensure componen
 
 | Deployer | Ordering Mechanism |
 |----------|-------------------|
-| `script` | Components listed in order in README |
+| `helm` | Components listed in order in README |
 | `argocd` | `sync-wave` annotations (0, 1, 2...) |
-| `flux` | `dependsOn` fields creating dependency chain |
 
 **Example Recipe with Deployment Order**:
 ```yaml

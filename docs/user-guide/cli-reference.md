@@ -496,17 +496,15 @@ The `--deployer` flag controls how deployment artifacts are generated:
 
 | Method | Description |
 |--------|-------------|
-| `script` | (Default) Generates shell scripts for manual deployment with `helm` commands |
+| `helm` | (Default) Generates Helm charts with values for deployment |
 | `argocd` | Generates ArgoCD Application manifests for GitOps deployment |
-| `flux` | Generates Flux HelmRelease resources for GitOps deployment |
 
 **Deployment Order:**
 
 All deployers respect the `deploymentOrder` field from the recipe, ensuring components are installed in the correct sequence:
 
-- **Script**: Components listed in README in deployment order
+- **Helm**: Components listed in README in deployment order
 - **ArgoCD**: Uses `argocd.argoproj.io/sync-wave` annotation (0 = first, 1 = second, etc.)
-- **Flux**: Uses `spec.dependsOn` to create a dependency chain between HelmReleases
 
 **Value Overrides (`--set`):**
 
