@@ -608,7 +608,10 @@ func TestLeafRecipesHaveCompleteCriteria(t *testing.T) {
 				return
 			}
 
-			// Leaf recipes should have some meaningful criteria for matching
+			// Leaf recipes should have at least some criteria for matching.
+			// They don't need ALL fields - partial criteria are valid for recipes
+			// that should match multiple scenarios (e.g., a GKE recipe that works
+			// with any accelerator or intent).
 			c := metadata.Spec.Criteria
 			if c == nil {
 				t.Error("leaf recipe missing criteria")
