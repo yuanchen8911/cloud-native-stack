@@ -231,7 +231,7 @@ When a query matches a leaf recipe that has a `spec.base` reference, the system 
 ├────────────────────────────────────────────────────────┤
 │                                                        │
 │  1. Load base measurements (universal config)          │
-│     └─ From embedded base.yaml                         │
+│     └─ From embedded overlays/base.yaml                │
 │                                                        │
 │  2. Match query to overlays (by criteria)              │
 │     ├─ Query matches recipes where:                    │
@@ -240,7 +240,7 @@ When a query matches a leaf recipe that has a `spec.base` reference, the system 
 │     └─ Resolve inheritance chain for each match        │
 │                                                        │
 │  3. Merge inheritance chain in order                   │
-│     ├─ Base values (from base.yaml)                    │
+│     ├─ Base values (from overlays/base.yaml)           │
 │     ├─ + eks (EKS-specific settings)                   │
 │     ├─ + eks-training (training optimizations)         │
 │     ├─ + gb200-eks-training (GB200 overrides)          │
@@ -801,7 +801,7 @@ X-RateLimit-Reset: 1735650000
 ### Embedded Data
 
 **Recipe Data:**
-- Location: `pkg/recipe/data/base.yaml` and `pkg/recipe/data/overlays/*.yaml`
+- Location: `pkg/recipe/data/overlays/*.yaml` (including `base.yaml`)
 - Embedded at compile time via `//go:embed` directives
 - Loaded once per process, cached in memory
 - TTL: 5 minutes (in-memory cache)

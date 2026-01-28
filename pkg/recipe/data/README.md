@@ -16,8 +16,8 @@ This directory contains recipe metadata and component configurations for the NVI
 ```
 pkg/recipe/data/
 ├── registry.yaml                  # Component registry (Helm & Kustomize configs)
-├── base.yaml                      # Base recipe (universal defaults)
-├── overlays/                      # Environment-specific overlays
+├── overlays/                      # Recipe overlays (including base)
+│   ├── base.yaml                  # Base recipe (universal defaults, root of inheritance)
 │   ├── eks.yaml                   # EKS overlay
 │   ├── eks-training.yaml          # EKS + training overlay
 │   ├── gb200-eks-training.yaml    # GB200 + EKS + training overlay
@@ -34,7 +34,7 @@ pkg/recipe/data/
 
 The recipe system uses a **base-plus-overlay architecture**:
 
-- **Base values** (`base.yaml`) provide default configurations
+- **Base values** (`overlays/base.yaml`) provide default configurations
 - **Overlay values** (e.g., `eks-gb200-training.yaml`) provide environment-specific optimizations
 - **Inline overrides** allow per-recipe customization without creating new files
 

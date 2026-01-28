@@ -29,11 +29,13 @@ The recipe data is organized in [`pkg/recipe/data/`](../../pkg/recipe/data/) as 
 
 ```
 pkg/recipe/data/
-├── base.yaml                      # Root recipe - all recipes inherit from this
-├── eks.yaml                       # EKS-specific settings
-├── eks-training.yaml              # EKS + training workloads (inherits from eks)
-├── gb200-eks-ubuntu-training.yaml # GB200/EKS/Ubuntu/training (inherits from eks-training)
-├── h100-ubuntu-inference.yaml     # H100/Ubuntu/inference
+├── registry.yaml                  # Component registry (Helm & Kustomize configs)
+├── overlays/                      # Recipe overlays (including base)
+│   ├── base.yaml                  # Root recipe - all recipes inherit from this
+│   ├── eks.yaml                   # EKS-specific settings
+│   ├── eks-training.yaml          # EKS + training workloads (inherits from eks)
+│   ├── gb200-eks-ubuntu-training.yaml # GB200/EKS/Ubuntu/training (inherits from eks-training)
+│   └── h100-ubuntu-inference.yaml # H100/Ubuntu/inference
 └── components/                    # Component values files
     ├── cert-manager/
     │   └── values.yaml
@@ -114,7 +116,7 @@ spec:
 | `kind` | Always `recipeMetadata` |
 | `apiVersion` | Always `cns.nvidia.com/v1alpha1` |
 | `metadata.name` | Unique recipe identifier |
-| `spec.base` | Parent recipe to inherit from (empty = inherits from `base.yaml`) |
+| `spec.base` | Parent recipe to inherit from (empty = inherits from `overlays/base.yaml`) |
 | `spec.criteria` | Query parameters that select this recipe |
 | `spec.constraints` | Pre-flight validation rules |
 | `spec.componentRefs` | List of components to deploy |
@@ -252,32 +254,32 @@ spec:
 The system supports inheritance chains of arbitrary depth:
 
 ```
-base.yaml
+overlays/base.yaml
     │
-    ├── eks.yaml (spec.base: empty → inherits from base)
+    ├── overlays/eks.yaml (spec.base: empty → inherits from base)
     │       │
-    │       └── eks-training.yaml (spec.base: eks)
+    │       └── overlays/eks-training.yaml (spec.base: eks)
     │               │
-    │               └── gb200-eks-training.yaml (spec.base: eks-training)
+    │               └── overlays/gb200-eks-training.yaml (spec.base: eks-training)
     │                       │
-    │                       └── gb200-eks-ubuntu-training.yaml (spec.base: gb200-eks-training)
+    │                       └── overlays/gb200-eks-ubuntu-training.yaml (spec.base: gb200-eks-training)
     │
-    └── h100-ubuntu-inference.yaml (spec.base: empty → inherits from base)
+    └── overlays/h100-ubuntu-inference.yaml (spec.base: empty → inherits from base)
 ```
 
 **Resolution Order:** When resolving `gb200-eks-ubuntu-training`:
-1. Start with `base.yaml` (root)
-2. Merge `eks.yaml` (EKS-specific settings)
-3. Merge `eks-training.yaml` (training optimizations)
-4. Merge `gb200-eks-training.yaml` (GB200 + training-specific overrides)
-5. Merge `gb200-eks-ubuntu-training.yaml` (Ubuntu + full-spec overrides)
+1. Start with `overlays/base.yaml` (root)
+2. Merge `overlays/eks.yaml` (EKS-specific settings)
+3. Merge `overlays/eks-training.yaml` (training optimizations)
+4. Merge `overlays/gb200-eks-training.yaml` (GB200 + training-specific overrides)
+5. Merge `overlays/gb200-eks-ubuntu-training.yaml` (Ubuntu + full-spec overrides)
 
 ### Inheritance Rules
 
 **1. Base Resolution**
-- `spec.base: ""` or omitted → Inherits directly from `base.yaml`
+- `spec.base: ""` or omitted → Inherits directly from `overlays/base.yaml`
 - `spec.base: "eks"` → Inherits from the recipe named "eks"
-- The root `base.yaml` has no parent (it's the foundation)
+- The root `overlays/base.yaml` has no parent (it's the foundation)
 
 **2. Merge Precedence**
 Later recipes in the chain override earlier ones:
@@ -306,7 +308,7 @@ base → eks → eks-training → gb200-eks-training → gb200-eks-ubuntu-traini
 ### Example: Inheritance Chain
 
 ```yaml
-# base.yaml - Foundation for all recipes
+# overlays/base.yaml - Foundation for all recipes
 kind: recipeMetadata
 apiVersion: cns.nvidia.com/v1alpha1
 metadata:
@@ -341,7 +343,7 @@ metadata:
   name: eks
 
 spec:
-  # Implicit base (inherits from base.yaml)
+  # Implicit base (inherits from overlays/base.yaml)
   
   criteria:
     service: eks  # Only service specified (partial criteria)
@@ -599,11 +601,11 @@ This asymmetric behavior ensures that a generic query like `--service eks --inte
 User Query: { service: "eks", os: "ubuntu", accelerator: "gb200", intent: "training" }
 
 Matching Recipes (sorted by specificity):
-  1. base.yaml              { }  (all "any")                                    Specificity: 0
-  2. eks.yaml               { service: eks }                                    Specificity: 1
-  3. eks-training.yaml      { service: eks, intent: training }                  Specificity: 2
-  4. gb200-eks-training.yaml { service: eks, accelerator: gb200, intent: training }  Specificity: 3
-  5. gb200-eks-ubuntu-training.yaml { service: eks, accelerator: gb200, os: ubuntu, intent: training }  Specificity: 4
+  1. overlays/base.yaml              { }  (all "any")                                    Specificity: 0
+  2. overlays/eks.yaml               { service: eks }                                    Specificity: 1
+  3. overlays/eks-training.yaml      { service: eks, intent: training }                  Specificity: 2
+  4. overlays/gb200-eks-training.yaml { service: eks, accelerator: gb200, intent: training }  Specificity: 3
+  5. overlays/gb200-eks-ubuntu-training.yaml { service: eks, accelerator: gb200, os: ubuntu, intent: training }  Specificity: 4
 
 Result: All matching recipes are applied in order of specificity
 ```
@@ -1063,7 +1065,7 @@ The recipe system supports extending or overriding embedded data with external f
 ```mermaid
 flowchart TD
     subgraph Embedded["Embedded Data (compile-time)"]
-        E1[base.yaml]
+        E1[overlays/base.yaml]
         E2[overlays/*.yaml]
         E3[components/*/values.yaml]
         E4[registry.yaml]
@@ -1112,7 +1114,7 @@ type DataProvider interface {
 | File Type | Behavior | Example |
 |-----------|----------|---------|
 | `registry.yaml` | **Merged** by component name | External adds/replaces components |
-| `base.yaml` | **Replaced** if exists externally | External completely overrides embedded |
+| `overlays/base.yaml` | **Replaced** if exists externally | External completely overrides embedded |
 | `overlays/*.yaml` | **Replaced** if same path | External overlay replaces embedded |
 | `components/*/values.yaml` | **Replaced** if same path | External values override embedded |
 

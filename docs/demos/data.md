@@ -45,7 +45,7 @@ tree -L 2 pkg/recipe/data/
 Base recipe (foundation for all recipes):
 
 ```shell
-yq . pkg/recipe/data/base.yaml
+yq . pkg/recipe/data/overlays/base.yaml
 ```
 
 ### Constraints
@@ -180,7 +180,7 @@ This matches all levels:
 Recipes define their own dependencies:
 
 ```shell
-yq . pkg/recipe/data/base.yaml
+yq . pkg/recipe/data/overlays/base.yaml
 ```
 
 View computed deployment order is computed at recipe composition time and sorted based on dependencies:

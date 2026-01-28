@@ -132,12 +132,12 @@
 //
 // Recipe generation uses YAML metadata files:
 //
-// 1. Load base.yaml (common component versions and settings)
+// 1. Load overlays/base.yaml (common component versions and settings)
 // 2. Find matching overlay files based on criteria
 // 3. Merge overlay configurations into result
 // 4. Return RecipeResult with component references
 //
-// Base structure (data/base.yaml):
+// Base structure (data/overlays/base.yaml):
 //
 //	apiVersion: cns.nvidia.com/v1alpha1
 //	kind: Base
@@ -193,7 +193,7 @@
 // # Data Source
 //
 // Recipe metadata is embedded at build time from:
-//   - recipe/data/base.yaml (base component versions)
+//   - recipe/data/overlays/base.yaml (base component versions)
 //   - recipe/data/overlays/*.yaml (criteria-specific overlays)
 //
 // The metadata store is loaded once and cached (singleton pattern with sync.Once).

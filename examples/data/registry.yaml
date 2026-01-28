@@ -1,0 +1,23 @@
+# External Component Registry
+#
+# This registry is merged with the embedded registry when using --data flag.
+# Components defined here are added to (or override) the embedded components.
+#
+# Usage:
+#   cnsctl recipe --service eks --accelerator gb200 --intent training --data ./examples/data
+#   cnsctl bundle --recipe recipe.yaml --data ./examples/data --output ./bundles
+
+apiVersion: cns.nvidia.com/v1alpha1
+kind: ComponentRegistry
+components:
+  # DGXC Teleport - Kubernetes access via Teleport
+  # Uses Kustomize with helmCharts to deploy teleport-kube-agent
+  - name: dgxc-teleport
+    displayName: DGXC Teleport
+    valueOverrideKeys:
+      - dgxcteleport
+      - teleport
+    kustomize:
+      defaultSource: https://gitlab-master.nvidia.com/dgxcloud/mk8s/components/dgxc-teleport.git
+      defaultPath: templates/components/dgxc-teleport/kustomize/overlays/standalone
+      defaultTag: "0.6.1"

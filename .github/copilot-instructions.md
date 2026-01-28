@@ -70,7 +70,7 @@ make server   # Start API server locally
    - Write table-driven tests with mocks
 
 2. **Update recipe data** in `pkg/recipe/data/`:
-   - Add base measurements in `base.yaml`
+   - Add base measurements in `overlays/base.yaml`
    - Create overlay files in `overlays/` with criteria matching
 
 3. **Test workflow**:

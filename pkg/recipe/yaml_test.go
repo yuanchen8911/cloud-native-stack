@@ -39,7 +39,7 @@ import (
 // testMetadataFS embeds all recipe data files for testing.
 // This uses a separate embed directive to include component values files.
 //
-//go:embed data/base.yaml data/overlays/*.yaml data/components/**/*.yaml
+//go:embed data/overlays/*.yaml data/components/**/*.yaml
 var testMetadataFS embed.FS
 
 // validMeasurementTypes are the valid top-level measurement types for constraints.
@@ -53,8 +53,8 @@ var validMeasurementTypes = map[string]bool{
 // validConstraintOperators are the supported constraint operators.
 var validConstraintOperators = []string{">=", "<=", ">", "<", "==", "!="}
 
-// baseYAMLFile is the base recipe filename.
-const baseYAMLFile = "base.yaml"
+// baseYAMLFile is the base recipe filename (relative to data/).
+const baseYAMLFile = "overlays/base.yaml"
 
 // ============================================================================
 // Schema Conformance Tests
@@ -134,7 +134,7 @@ func TestAllOverlayCriteriaUseValidEnums(t *testing.T) {
 	for _, path := range files {
 		filename := filepath.Base(path)
 		// Skip base.yaml - it doesn't have criteria
-		if filename == baseYAMLFile {
+		if filename == filepath.Base(baseYAMLFile) {
 			continue
 		}
 
@@ -247,7 +247,7 @@ func TestAllDependencyReferencesExist(t *testing.T) {
 
 	for _, path := range files {
 		filename := filepath.Base(path)
-		if filename == baseYAMLFile {
+		if filename == filepath.Base(baseYAMLFile) {
 			continue // Already validated by ValidateDependencies
 		}
 
@@ -418,7 +418,7 @@ func TestAllBaseReferencesPointToExistingRecipes(t *testing.T) {
 	// Check all base references
 	for _, path := range files {
 		filename := filepath.Base(path)
-		if filename == baseYAMLFile {
+		if filename == filepath.Base(baseYAMLFile) {
 			continue // base.yaml doesn't have a base reference
 		}
 
@@ -536,7 +536,7 @@ func TestIntermediateRecipesHavePartialCriteria(t *testing.T) {
 
 	for _, path := range files {
 		filename := filepath.Base(path)
-		if filename == baseYAMLFile {
+		if filename == filepath.Base(baseYAMLFile) {
 			continue
 		}
 
@@ -591,7 +591,7 @@ func TestLeafRecipesHaveCompleteCriteria(t *testing.T) {
 	// Check leaf recipes (not referenced by others) have complete criteria
 	for _, path := range files {
 		filename := filepath.Base(path)
-		if filename == baseYAMLFile {
+		if filename == filepath.Base(baseYAMLFile) {
 			continue
 		}
 
@@ -646,7 +646,8 @@ func TestNoDuplicateCriteriaAcrossOverlays(t *testing.T) {
 
 	for _, path := range files {
 		filename := filepath.Base(path)
-		if filename == baseYAMLFile {
+		// Skip base.yaml - it doesn't have criteria
+		if filename == filepath.Base(baseYAMLFile) {
 			continue
 		}
 
@@ -695,7 +696,7 @@ func TestBaseAndOverlaysMergeWithoutConflict(t *testing.T) {
 
 	for _, path := range files {
 		filename := filepath.Base(path)
-		if filename == baseYAMLFile {
+		if filename == filepath.Base(baseYAMLFile) {
 			continue
 		}
 
@@ -742,7 +743,7 @@ func TestMergedRecipesHaveNoCycles(t *testing.T) {
 
 	for _, path := range files {
 		filename := filepath.Base(path)
-		if filename == baseYAMLFile {
+		if filename == filepath.Base(baseYAMLFile) {
 			continue
 		}
 

@@ -20,7 +20,7 @@ This guide covers how to create, modify, and validate recipe metadata.
 
 Recipe metadata files define component configurations for GPU-accelerated Kubernetes deployments. The system uses a **base-plus-overlay architecture** with **multi-level inheritance**:
 
-- **Base values** (`base.yaml`) provide default configurations
+- **Base values** (`overlays/base.yaml`) provide default configurations
 - **Intermediate recipes** (e.g., `eks.yaml`, `eks-training.yaml`) capture shared configurations
 - **Leaf recipes** (e.g., `gb200-eks-ubuntu-training.yaml`) provide hardware-specific overrides
 - **Inline overrides** allow per-recipe customization without creating new files
@@ -61,15 +61,15 @@ spec:
 ### Inheritance Chain Example
 
 ```
-base.yaml (foundation)
+overlays/base.yaml (foundation)
     │
-    └── eks.yaml (EKS-specific settings)
+    └── overlays/eks.yaml (EKS-specific settings)
             │
-            └── eks-training.yaml (training optimizations)
+            └── overlays/eks-training.yaml (training optimizations)
                     │
-                    └── gb200-eks-training.yaml (GB200 + training overrides)
+                    └── overlays/gb200-eks-training.yaml (GB200 + training overrides)
                             │
-                            └── gb200-eks-ubuntu-training.yaml (full criteria: OS + all specifics)
+                            └── overlays/gb200-eks-ubuntu-training.yaml (full criteria: OS + all specifics)
 ```
 
 ### Creating an Intermediate Recipe
@@ -77,14 +77,14 @@ base.yaml (foundation)
 Intermediate recipes have **partial criteria** and are not matched directly by generic user queries (unless the query also has matching criteria). They capture shared configurations for a category:
 
 ```yaml
-# eks.yaml - Intermediate recipe for all EKS deployments
+# overlays/eks.yaml - Intermediate recipe for all EKS deployments
 kind: recipeMetadata
 apiVersion: cns.nvidia.com/v1alpha1
 metadata:
   name: eks
 
 spec:
-  # No spec.base = inherits from base.yaml
+  # No spec.base = inherits from overlays/base.yaml
   
   criteria:
     service: eks  # Only service specified (partial criteria)
@@ -177,10 +177,10 @@ spec:
 When resolving a leaf recipe, the system merges in order from root to leaf:
 
 ```
-1. base.yaml (lowest precedence)
-2. eks.yaml
-3. eks-training.yaml
-4. gb200-eks-ubuntu-training.yaml (highest precedence)
+1. overlays/base.yaml (lowest precedence)
+2. overlays/eks.yaml
+3. overlays/eks-training.yaml
+4. overlays/gb200-eks-ubuntu-training.yaml (highest precedence)
 ```
 
 **Merge rules:**
@@ -390,7 +390,7 @@ File names are for human readability only—the recipe engine matches based on `
 
 | File Type | Naming Pattern | Examples |
 |-----------|---------------|----------|
-| Base recipe | `base.yaml` | `base.yaml` |
+| Base recipe | `overlays/base.yaml` | `overlays/base.yaml` |
 | Intermediate recipe (service) | `{service}.yaml` | `eks.yaml`, `gke.yaml` |
 | Intermediate recipe (intent) | `{service}-{intent}.yaml` | `eks-training.yaml`, `gke-inference.yaml` |
 | Component values (base) | `base.yaml` or `values.yaml` | `components/gpu-operator/base.yaml` |

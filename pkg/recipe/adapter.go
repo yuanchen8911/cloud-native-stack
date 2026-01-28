@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-//go:embed data/base.yaml data/overlays/*.yaml data/registry.yaml data/components/*/*.yaml data/components/*/manifests/*.yaml
+//go:embed data/overlays/*.yaml data/registry.yaml data/components/*/*.yaml data/components/*/manifests/*.yaml
 var dataFS embed.FS
 
 // GetEmbeddedFS returns the embedded data filesystem.

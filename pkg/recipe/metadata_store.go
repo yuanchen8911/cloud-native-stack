@@ -89,7 +89,8 @@ func loadMetadataStore(_ context.Context) (*MetadataStore, error) {
 			}
 
 			// Categorize as base or overlay
-			if filename == "base.yaml" {
+			// base.yaml is now in overlays/ directory but still identified by filename
+			if filename == "base.yaml" && strings.Contains(path, "overlays/") {
 				store.Base = &metadata
 			} else {
 				store.Overlays[metadata.Metadata.Name] = &metadata

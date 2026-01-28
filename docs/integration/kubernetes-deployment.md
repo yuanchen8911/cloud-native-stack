@@ -408,7 +408,7 @@ The e2e script:
 
 ### ConfigMap for Custom Recipe Data (Advanced)
 
-> **Note:** This example shows the concept of mounting custom recipe data. The actual recipe format uses a base-plus-overlay architecture. See `pkg/recipe/data/` for the current schema (`base.yaml` and `overlays/*.yaml`).
+> **Note:** This example shows the concept of mounting custom recipe data. The actual recipe format uses a base-plus-overlay architecture. See `pkg/recipe/data/` for the current schema (`overlays/*.yaml` including `base.yaml`).
 
 ```yaml
 # configmap.yaml - Example showing custom recipe data mounting
@@ -418,11 +418,11 @@ metadata:
   name: cns-recipe-data
   namespace: cns
 data:
-  base.yaml: |
+  overlays/base.yaml: |
     # Your custom base recipe
     apiVersion: cns.nvidia.com/v1alpha1
     kind: RecipeMetadata
-    # ... (see pkg/recipe/data/base.yaml for schema)
+    # ... (see pkg/recipe/data/overlays/base.yaml for schema)
 ```
 
 Mount in deployment:

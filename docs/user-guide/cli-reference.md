@@ -903,8 +903,8 @@ The external directory must mirror the embedded data structure:
 ```
 my-data/
 ├── registry.yaml          # REQUIRED - merged with embedded registry
-├── base.yaml              # Optional - replaces embedded base.yaml
 ├── overlays/
+│   └── base.yaml              # Optional - replaces embedded base.yaml
 │   └── custom-overlay.yaml    # Optional - adds new overlay
 └── components/
     └── gpu-operator/

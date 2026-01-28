@@ -111,7 +111,13 @@ func TestLayeredDataProvider_OverridesFile(t *testing.T) {
 		t.Fatalf("failed to write registry.yaml: %v", err)
 	}
 
-	// Create a custom base.yaml that will override embedded
+	// Create overlays directory
+	overlaysDir := filepath.Join(tmpDir, "overlays")
+	if err := os.MkdirAll(overlaysDir, 0755); err != nil {
+		t.Fatalf("failed to create overlays dir: %v", err)
+	}
+
+	// Create a custom base.yaml that will override embedded (now in overlays/)
 	baseContent := `apiVersion: cns.nvidia.com/v1alpha1
 kind: RecipeMetadata
 metadata:
@@ -119,7 +125,7 @@ metadata:
 spec:
   components: []
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "base.yaml"), []byte(baseContent), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(overlaysDir, "base.yaml"), []byte(baseContent), 0600); err != nil {
 		t.Fatalf("failed to write base.yaml: %v", err)
 	}
 
@@ -131,19 +137,19 @@ spec:
 		t.Fatalf("failed to create layered provider: %v", err)
 	}
 
-	// Read base.yaml - should get external version
-	data, err := provider.ReadFile("base.yaml")
+	// Read overlays/base.yaml - should get external version
+	data, err := provider.ReadFile("overlays/base.yaml")
 	if err != nil {
-		t.Fatalf("failed to read base.yaml: %v", err)
+		t.Fatalf("failed to read overlays/base.yaml: %v", err)
 	}
 
 	content := string(data)
 	if !contains(content, "custom-base") {
-		t.Error("base.yaml should be from external directory")
+		t.Error("overlays/base.yaml should be from external directory")
 	}
 
 	// Check source
-	source := provider.Source("base.yaml")
+	source := provider.Source("overlays/base.yaml")
 	if source != "external" {
 		t.Errorf("expected source 'external', got %q", source)
 	}
@@ -277,18 +283,18 @@ func TestLayeredDataProvider_FallsBackToEmbedded(t *testing.T) {
 		t.Fatalf("failed to create layered provider: %v", err)
 	}
 
-	// Read base.yaml - should fall back to embedded since we didn't override it
-	data, err := provider.ReadFile("base.yaml")
+	// Read overlays/base.yaml - should fall back to embedded since we didn't override it
+	data, err := provider.ReadFile("overlays/base.yaml")
 	if err != nil {
-		t.Fatalf("failed to read base.yaml: %v", err)
+		t.Fatalf("failed to read overlays/base.yaml: %v", err)
 	}
 
 	if len(data) == 0 {
-		t.Error("base.yaml should not be empty")
+		t.Error("overlays/base.yaml should not be empty")
 	}
 
 	// Source should be embedded
-	source := provider.Source("base.yaml")
+	source := provider.Source("overlays/base.yaml")
 	if source != "embedded" {
 		t.Errorf("expected source 'embedded', got %q", source)
 	}
