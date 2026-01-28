@@ -500,7 +500,7 @@ func TestInheritanceChain(t *testing.T) {
 	if gpuOp.Overrides == nil {
 		t.Error("gpu-operator should have overrides from gb200-eks-training")
 	} else {
-		if driver, ok := gpuOp.Overrides["driver"].(map[string]interface{}); ok {
+		if driver, ok := gpuOp.Overrides["driver"].(map[string]any); ok {
 			if version, ok := driver["version"].(string); ok {
 				if version != "580.82.07" {
 					t.Errorf("Expected GB200 driver version 580.82.07, got %s", version)
@@ -548,7 +548,7 @@ func TestInheritanceChainGB200(t *testing.T) {
 
 	// GB200 should have gdrcopy enabled
 	if gpuOp.Overrides != nil {
-		if gdrcopy, ok := gpuOp.Overrides["gdrcopy"].(map[string]interface{}); ok {
+		if gdrcopy, ok := gpuOp.Overrides["gdrcopy"].(map[string]any); ok {
 			if enabled, ok := gdrcopy["enabled"].(bool); ok && !enabled {
 				t.Error("GB200 should have gdrcopy enabled")
 			}

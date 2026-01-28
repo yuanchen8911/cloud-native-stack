@@ -110,7 +110,7 @@ func (k *Collector) collectClusterPolicies(ctx context.Context) (map[string]meas
 
 // flattenSpec recursively flattens a nested map into dot-notation keys.
 // Example: {"driver": {"version": "580.82.07"}} becomes "driver.version": "580.82.07"
-func flattenSpec(data map[string]interface{}, prefix string, result map[string]measurement.Reading) {
+func flattenSpec(data map[string]any, prefix string, result map[string]measurement.Reading) {
 	for key, value := range data {
 		fullKey := key
 		if prefix != "" {
@@ -118,10 +118,10 @@ func flattenSpec(data map[string]interface{}, prefix string, result map[string]m
 		}
 
 		switch v := value.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			// Recursively flatten nested maps
 			flattenSpec(v, fullKey, result)
-		case []interface{}:
+		case []any:
 			// Convert arrays to JSON strings for readability
 			if len(v) > 0 {
 				jsonBytes, err := json.Marshal(v)

@@ -197,7 +197,7 @@ func TestGenerateBundleMetadataWithExtensions(t *testing.T) {
 		wantHelmChartVersion string
 		wantExtensionCount   int
 		wantExtensionKey     string
-		wantExtensionValue   interface{}
+		wantExtensionValue   any
 	}{
 		{
 			name:   "with extensions and default version",
@@ -207,7 +207,7 @@ func TestGenerateBundleMetadataWithExtensions(t *testing.T) {
 				DefaultHelmRepository:   "https://repo.io",
 				DefaultHelmChart:        "chart",
 				DefaultHelmChartVersion: "v1.2.3",
-				MetadataExtensions: map[string]interface{}{
+				MetadataExtensions: map[string]any{
 					"CustomField": "custom-value",
 					"Enabled":     true,
 				},

@@ -22,7 +22,7 @@ const (
 // Supports dot-notation paths (e.g., "gds.enabled", "driver.version").
 // Automatically handles type conversion for strings, bools, ints, and nested structs.
 // Returns an error containing all failed overrides instead of stopping at the first failure.
-func ApplyValueOverrides(target interface{}, overrides map[string]string) error {
+func ApplyValueOverrides(target any, overrides map[string]string) error {
 	if len(overrides) == 0 {
 		return nil
 	}
@@ -52,10 +52,10 @@ func ApplyValueOverrides(target interface{}, overrides map[string]string) error 
 	return nil
 }
 
-// ApplyMapOverrides applies overrides to a map[string]interface{} using dot-notation paths.
+// ApplyMapOverrides applies overrides to a map[string]any using dot-notation paths.
 // Handles nested maps by traversing the path segments and creating nested maps as needed.
 // Useful for applying --set flag overrides to values.yaml content.
-func ApplyMapOverrides(target map[string]interface{}, overrides map[string]string) error {
+func ApplyMapOverrides(target map[string]any, overrides map[string]string) error {
 	if target == nil {
 		return fmt.Errorf("target map cannot be nil")
 	}
@@ -80,7 +80,7 @@ func ApplyMapOverrides(target map[string]interface{}, overrides map[string]strin
 
 // setMapValueByPath sets a value in a nested map using dot-notation path.
 // Creates nested maps as needed. Converts string values to bools when appropriate.
-func setMapValueByPath(target map[string]interface{}, path, value string) error {
+func setMapValueByPath(target map[string]any, path, value string) error {
 	parts := strings.Split(path, ".")
 	current := target
 
@@ -89,14 +89,14 @@ func setMapValueByPath(target map[string]interface{}, path, value string) error 
 		part := parts[i]
 		if next, ok := current[part]; ok {
 			// If the value exists, it must be a map
-			if nextMap, ok := next.(map[string]interface{}); ok {
+			if nextMap, ok := next.(map[string]any); ok {
 				current = nextMap
 			} else {
 				return fmt.Errorf("path segment %q exists but is not a map (type: %T)", part, next)
 			}
 		} else {
 			// Create a new nested map
-			newMap := make(map[string]interface{})
+			newMap := make(map[string]any)
 			current[part] = newMap
 			current = newMap
 		}
@@ -113,7 +113,7 @@ func setMapValueByPath(target map[string]interface{}, path, value string) error 
 
 // convertMapValue converts a string value to an appropriate Go type.
 // Handles bools ("true"/"false") and numbers.
-func convertMapValue(value string) interface{} {
+func convertMapValue(value string) any {
 	// Try bool conversion
 	if value == StrTrue {
 		return true
@@ -523,7 +523,7 @@ func parseBool(value string) (bool, error) {
 // ApplyNodeSelectorOverrides applies node selector overrides to a values map.
 // If nodeSelector is non-empty, it sets or merges with the existing nodeSelector field.
 // The function applies to the specified paths in the values map (e.g., "nodeSelector", "webhook.nodeSelector").
-func ApplyNodeSelectorOverrides(values map[string]interface{}, nodeSelector map[string]string, paths ...string) {
+func ApplyNodeSelectorOverrides(values map[string]any, nodeSelector map[string]string, paths ...string) {
 	if len(nodeSelector) == 0 || values == nil {
 		return
 	}
@@ -539,7 +539,7 @@ func ApplyNodeSelectorOverrides(values map[string]interface{}, nodeSelector map[
 }
 
 // setNodeSelectorAtPath sets the node selector at the specified dot-notation path.
-func setNodeSelectorAtPath(values map[string]interface{}, nodeSelector map[string]string, path string) {
+func setNodeSelectorAtPath(values map[string]any, nodeSelector map[string]string, path string) {
 	parts := strings.Split(path, ".")
 	current := values
 
@@ -547,25 +547,25 @@ func setNodeSelectorAtPath(values map[string]interface{}, nodeSelector map[strin
 	for i := 0; i < len(parts)-1; i++ {
 		part := parts[i]
 		if next, ok := current[part]; ok {
-			if nextMap, ok := next.(map[string]interface{}); ok {
+			if nextMap, ok := next.(map[string]any); ok {
 				current = nextMap
 			} else {
 				// Path doesn't exist as expected structure, create it
-				newMap := make(map[string]interface{})
+				newMap := make(map[string]any)
 				current[part] = newMap
 				current = newMap
 			}
 		} else {
 			// Create the intermediate path
-			newMap := make(map[string]interface{})
+			newMap := make(map[string]any)
 			current[part] = newMap
 			current = newMap
 		}
 	}
 
-	// Set the node selector - convert map[string]string to map[string]interface{}
+	// Set the node selector - convert map[string]string to map[string]any
 	lastPart := parts[len(parts)-1]
-	nsMap := make(map[string]interface{}, len(nodeSelector))
+	nsMap := make(map[string]any, len(nodeSelector))
 	for k, v := range nodeSelector {
 		nsMap[k] = v
 	}
@@ -575,7 +575,7 @@ func setNodeSelectorAtPath(values map[string]interface{}, nodeSelector map[strin
 // ApplyTolerationsOverrides applies toleration overrides to a values map.
 // If tolerations is non-empty, it sets or replaces the existing tolerations field.
 // The function applies to the specified paths in the values map (e.g., "tolerations", "webhook.tolerations").
-func ApplyTolerationsOverrides(values map[string]interface{}, tolerations []corev1.Toleration, paths ...string) {
+func ApplyTolerationsOverrides(values map[string]any, tolerations []corev1.Toleration, paths ...string) {
 	if len(tolerations) == 0 || values == nil {
 		return
 	}
@@ -594,7 +594,7 @@ func ApplyTolerationsOverrides(values map[string]interface{}, tolerations []core
 }
 
 // setTolerationsAtPath sets the tolerations at the specified dot-notation path.
-func setTolerationsAtPath(values map[string]interface{}, tolerations []map[string]interface{}, path string) {
+func setTolerationsAtPath(values map[string]any, tolerations []map[string]any, path string) {
 	parts := strings.Split(path, ".")
 	current := values
 
@@ -602,17 +602,17 @@ func setTolerationsAtPath(values map[string]interface{}, tolerations []map[strin
 	for i := 0; i < len(parts)-1; i++ {
 		part := parts[i]
 		if next, ok := current[part]; ok {
-			if nextMap, ok := next.(map[string]interface{}); ok {
+			if nextMap, ok := next.(map[string]any); ok {
 				current = nextMap
 			} else {
 				// Path doesn't exist as expected structure, create it
-				newMap := make(map[string]interface{})
+				newMap := make(map[string]any)
 				current[part] = newMap
 				current = newMap
 			}
 		} else {
 			// Create the intermediate path
-			newMap := make(map[string]interface{})
+			newMap := make(map[string]any)
 			current[part] = newMap
 			current = newMap
 		}
@@ -620,8 +620,8 @@ func setTolerationsAtPath(values map[string]interface{}, tolerations []map[strin
 
 	// Set the tolerations
 	lastPart := parts[len(parts)-1]
-	// Convert to []interface{} for proper YAML serialization
-	tolInterface := make([]interface{}, len(tolerations))
+	// Convert to []any for proper YAML serialization
+	tolInterface := make([]any, len(tolerations))
 	for i, t := range tolerations {
 		tolInterface[i] = t
 	}
@@ -630,11 +630,11 @@ func setTolerationsAtPath(values map[string]interface{}, tolerations []map[strin
 
 // TolerationsToPodSpec converts a slice of corev1.Toleration to a YAML-friendly format.
 // This format matches what Kubernetes expects in pod specs and Helm values.
-func TolerationsToPodSpec(tolerations []corev1.Toleration) []map[string]interface{} {
-	result := make([]map[string]interface{}, 0, len(tolerations))
+func TolerationsToPodSpec(tolerations []corev1.Toleration) []map[string]any {
+	result := make([]map[string]any, 0, len(tolerations))
 
 	for _, t := range tolerations {
-		tolMap := make(map[string]interface{})
+		tolMap := make(map[string]any)
 
 		// Only include non-empty fields to keep YAML clean
 		if t.Key != "" {
@@ -662,14 +662,14 @@ func TolerationsToPodSpec(tolerations []corev1.Toleration) []map[string]interfac
 // NodeSelectorToMatchExpressions converts a map of node selectors to matchExpressions format.
 // This format is used by some CRDs like Skyhook that use label selector syntax.
 // Each key=value pair becomes a matchExpression with operator "In" and single value.
-func NodeSelectorToMatchExpressions(nodeSelector map[string]string) []map[string]interface{} {
+func NodeSelectorToMatchExpressions(nodeSelector map[string]string) []map[string]any {
 	if len(nodeSelector) == 0 {
 		return nil
 	}
 
-	result := make([]map[string]interface{}, 0, len(nodeSelector))
+	result := make([]map[string]any, 0, len(nodeSelector))
 	for key, value := range nodeSelector {
-		expr := map[string]interface{}{
+		expr := map[string]any{
 			"key":      key,
 			"operator": "In",
 			"values":   []string{value},

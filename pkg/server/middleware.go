@@ -70,7 +70,7 @@ func (s *Server) rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			retryAfterSeconds := "1"
 			w.Header().Set("Retry-After", retryAfterSeconds)
 			WriteError(w, r, http.StatusTooManyRequests, cnserrors.ErrCodeRateLimitExceeded,
-				"Rate limit exceeded", true, map[string]interface{}{
+				"Rate limit exceeded", true, map[string]any{
 					"limit": s.config.RateLimit,
 					"burst": s.config.RateLimitBurst,
 				})

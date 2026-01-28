@@ -173,7 +173,7 @@
 //	type RecipeInput interface {
 //	    GetMeasurements() []*measurement.Measurement
 //	    GetComponentRef(name string) *ComponentRef
-//	    GetValuesForComponent(name string) (map[string]interface{}, error)
+//	    GetValuesForComponent(name string) (map[string]any, error)
 //	}
 //
 // # Error Handling

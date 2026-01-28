@@ -238,7 +238,7 @@ func TestApplyValueOverrides_AcronymFields(t *testing.T) {
 func TestApplyValueOverrides_Errors(t *testing.T) {
 	tests := []struct {
 		name      string
-		target    interface{}
+		target    any
 		overrides map[string]string
 		wantErr   bool
 		errMsg    string
@@ -471,20 +471,20 @@ func containsSubstringHelper(s, substr string) bool {
 func TestApplyNodeSelectorOverrides(t *testing.T) {
 	tests := []struct {
 		name         string
-		values       map[string]interface{}
+		values       map[string]any
 		nodeSelector map[string]string
 		paths        []string
-		verify       func(t *testing.T, values map[string]interface{})
+		verify       func(t *testing.T, values map[string]any)
 	}{
 		{
 			name:   "applies to top-level nodeSelector",
-			values: make(map[string]interface{}),
+			values: make(map[string]any),
 			nodeSelector: map[string]string{
 				"nodeGroup": "system-cpu",
 			},
 			paths: []string{"nodeSelector"},
-			verify: func(t *testing.T, values map[string]interface{}) {
-				ns, ok := values["nodeSelector"].(map[string]interface{})
+			verify: func(t *testing.T, values map[string]any) {
+				ns, ok := values["nodeSelector"].(map[string]any)
 				if !ok {
 					t.Fatal("nodeSelector not found or wrong type")
 				}
@@ -495,16 +495,16 @@ func TestApplyNodeSelectorOverrides(t *testing.T) {
 		},
 		{
 			name: "applies to nested paths",
-			values: map[string]interface{}{
-				"webhook": make(map[string]interface{}),
+			values: map[string]any{
+				"webhook": make(map[string]any),
 			},
 			nodeSelector: map[string]string{
 				"role": "control-plane",
 			},
 			paths: []string{"nodeSelector", "webhook.nodeSelector"},
-			verify: func(t *testing.T, values map[string]interface{}) {
+			verify: func(t *testing.T, values map[string]any) {
 				// Check top-level
-				ns, ok := values["nodeSelector"].(map[string]interface{})
+				ns, ok := values["nodeSelector"].(map[string]any)
 				if !ok {
 					t.Fatal("nodeSelector not found")
 				}
@@ -512,11 +512,11 @@ func TestApplyNodeSelectorOverrides(t *testing.T) {
 					t.Errorf("nodeSelector.role = %v, want control-plane", ns["role"])
 				}
 				// Check nested
-				wh, ok := values["webhook"].(map[string]interface{})
+				wh, ok := values["webhook"].(map[string]any)
 				if !ok {
 					t.Fatal("webhook not found")
 				}
-				whNs, ok := wh["nodeSelector"].(map[string]interface{})
+				whNs, ok := wh["nodeSelector"].(map[string]any)
 				if !ok {
 					t.Fatal("webhook.nodeSelector not found")
 				}
@@ -527,10 +527,10 @@ func TestApplyNodeSelectorOverrides(t *testing.T) {
 		},
 		{
 			name:         "empty nodeSelector is no-op",
-			values:       make(map[string]interface{}),
+			values:       make(map[string]any),
 			nodeSelector: map[string]string{},
 			paths:        []string{"nodeSelector"},
-			verify: func(t *testing.T, values map[string]interface{}) {
+			verify: func(t *testing.T, values map[string]any) {
 				if _, ok := values["nodeSelector"]; ok {
 					t.Error("nodeSelector should not be set for empty input")
 				}
@@ -549,14 +549,14 @@ func TestApplyNodeSelectorOverrides(t *testing.T) {
 func TestApplyTolerationsOverrides(t *testing.T) {
 	tests := []struct {
 		name        string
-		values      map[string]interface{}
+		values      map[string]any
 		tolerations []corev1.Toleration
 		paths       []string
-		verify      func(t *testing.T, values map[string]interface{})
+		verify      func(t *testing.T, values map[string]any)
 	}{
 		{
 			name:   "applies single toleration",
-			values: make(map[string]interface{}),
+			values: make(map[string]any),
 			tolerations: []corev1.Toleration{
 				{
 					Key:      "dedicated",
@@ -566,15 +566,15 @@ func TestApplyTolerationsOverrides(t *testing.T) {
 				},
 			},
 			paths: []string{"tolerations"},
-			verify: func(t *testing.T, values map[string]interface{}) {
-				tols, ok := values["tolerations"].([]interface{})
+			verify: func(t *testing.T, values map[string]any) {
+				tols, ok := values["tolerations"].([]any)
 				if !ok {
 					t.Fatal("tolerations not found or wrong type")
 				}
 				if len(tols) != 1 {
 					t.Fatalf("expected 1 toleration, got %d", len(tols))
 				}
-				tol, ok := tols[0].(map[string]interface{})
+				tol, ok := tols[0].(map[string]any)
 				if !ok {
 					t.Fatal("toleration entry wrong type")
 				}
@@ -588,16 +588,16 @@ func TestApplyTolerationsOverrides(t *testing.T) {
 		},
 		{
 			name: "applies to nested paths",
-			values: map[string]interface{}{
-				"webhook": make(map[string]interface{}),
+			values: map[string]any{
+				"webhook": make(map[string]any),
 			},
 			tolerations: []corev1.Toleration{
 				{Operator: corev1.TolerationOpExists},
 			},
 			paths: []string{"tolerations", "webhook.tolerations"},
-			verify: func(t *testing.T, values map[string]interface{}) {
+			verify: func(t *testing.T, values map[string]any) {
 				// Check top-level
-				tols, ok := values["tolerations"].([]interface{})
+				tols, ok := values["tolerations"].([]any)
 				if !ok {
 					t.Fatal("tolerations not found")
 				}
@@ -605,11 +605,11 @@ func TestApplyTolerationsOverrides(t *testing.T) {
 					t.Fatalf("expected 1 toleration, got %d", len(tols))
 				}
 				// Check nested
-				wh, ok := values["webhook"].(map[string]interface{})
+				wh, ok := values["webhook"].(map[string]any)
 				if !ok {
 					t.Fatal("webhook not found")
 				}
-				whTols, ok := wh["tolerations"].([]interface{})
+				whTols, ok := wh["tolerations"].([]any)
 				if !ok {
 					t.Fatal("webhook.tolerations not found")
 				}
@@ -620,10 +620,10 @@ func TestApplyTolerationsOverrides(t *testing.T) {
 		},
 		{
 			name:        "empty tolerations is no-op",
-			values:      make(map[string]interface{}),
+			values:      make(map[string]any),
 			tolerations: []corev1.Toleration{},
 			paths:       []string{"tolerations"},
-			verify: func(t *testing.T, values map[string]interface{}) {
+			verify: func(t *testing.T, values map[string]any) {
 				if _, ok := values["tolerations"]; ok {
 					t.Error("tolerations should not be set for empty input")
 				}
@@ -643,7 +643,7 @@ func TestTolerationsToPodSpec(t *testing.T) {
 	tests := []struct {
 		name        string
 		tolerations []corev1.Toleration
-		verify      func(t *testing.T, result []map[string]interface{})
+		verify      func(t *testing.T, result []map[string]any)
 	}{
 		{
 			name: "converts full toleration",
@@ -655,7 +655,7 @@ func TestTolerationsToPodSpec(t *testing.T) {
 					Effect:   corev1.TaintEffectNoSchedule,
 				},
 			},
-			verify: func(t *testing.T, result []map[string]interface{}) {
+			verify: func(t *testing.T, result []map[string]any) {
 				if len(result) != 1 {
 					t.Fatalf("expected 1 result, got %d", len(result))
 				}
@@ -679,7 +679,7 @@ func TestTolerationsToPodSpec(t *testing.T) {
 			tolerations: []corev1.Toleration{
 				{Operator: corev1.TolerationOpExists},
 			},
-			verify: func(t *testing.T, result []map[string]interface{}) {
+			verify: func(t *testing.T, result []map[string]any) {
 				if len(result) != 1 {
 					t.Fatalf("expected 1 result, got %d", len(result))
 				}
@@ -708,19 +708,19 @@ func TestTolerationsToPodSpec(t *testing.T) {
 func TestApplyMapOverrides(t *testing.T) {
 	tests := []struct {
 		name      string
-		target    map[string]interface{}
+		target    map[string]any
 		overrides map[string]string
 		wantErr   bool
-		verify    func(t *testing.T, target map[string]interface{})
+		verify    func(t *testing.T, target map[string]any)
 	}{
 		{
 			name:   "sets simple value",
-			target: make(map[string]interface{}),
+			target: make(map[string]any),
 			overrides: map[string]string{
 				"key": "value",
 			},
 			wantErr: false,
-			verify: func(t *testing.T, target map[string]interface{}) {
+			verify: func(t *testing.T, target map[string]any) {
 				if target["key"] != "value" {
 					t.Errorf("key = %v, want value", target["key"])
 				}
@@ -728,13 +728,13 @@ func TestApplyMapOverrides(t *testing.T) {
 		},
 		{
 			name:   "sets nested value",
-			target: make(map[string]interface{}),
+			target: make(map[string]any),
 			overrides: map[string]string{
 				"driver.version": "550.0.0",
 			},
 			wantErr: false,
-			verify: func(t *testing.T, target map[string]interface{}) {
-				driver, ok := target["driver"].(map[string]interface{})
+			verify: func(t *testing.T, target map[string]any) {
+				driver, ok := target["driver"].(map[string]any)
 				if !ok {
 					t.Fatal("driver not found or wrong type")
 				}
@@ -745,15 +745,15 @@ func TestApplyMapOverrides(t *testing.T) {
 		},
 		{
 			name:   "sets deeply nested value",
-			target: make(map[string]interface{}),
+			target: make(map[string]any),
 			overrides: map[string]string{
 				"dcgm.exporter.config.enabled": "true",
 			},
 			wantErr: false,
-			verify: func(t *testing.T, target map[string]interface{}) {
-				dcgm := target["dcgm"].(map[string]interface{})
-				exporter := dcgm["exporter"].(map[string]interface{})
-				config := exporter["config"].(map[string]interface{})
+			verify: func(t *testing.T, target map[string]any) {
+				dcgm := target["dcgm"].(map[string]any)
+				exporter := dcgm["exporter"].(map[string]any)
+				config := exporter["config"].(map[string]any)
 				if config["enabled"] != true {
 					t.Errorf("dcgm.exporter.config.enabled = %v, want true", config["enabled"])
 				}
@@ -761,8 +761,8 @@ func TestApplyMapOverrides(t *testing.T) {
 		},
 		{
 			name: "merges with existing map",
-			target: map[string]interface{}{
-				"driver": map[string]interface{}{
+			target: map[string]any{
+				"driver": map[string]any{
 					"enabled": true,
 				},
 			},
@@ -770,8 +770,8 @@ func TestApplyMapOverrides(t *testing.T) {
 				"driver.version": "550.0.0",
 			},
 			wantErr: false,
-			verify: func(t *testing.T, target map[string]interface{}) {
-				driver := target["driver"].(map[string]interface{})
+			verify: func(t *testing.T, target map[string]any) {
+				driver := target["driver"].(map[string]any)
 				if driver["enabled"] != true {
 					t.Error("existing enabled field was lost")
 				}
@@ -788,10 +788,10 @@ func TestApplyMapOverrides(t *testing.T) {
 		},
 		{
 			name:      "empty overrides is no-op",
-			target:    make(map[string]interface{}),
+			target:    make(map[string]any),
 			overrides: map[string]string{},
 			wantErr:   false,
-			verify: func(t *testing.T, target map[string]interface{}) {
+			verify: func(t *testing.T, target map[string]any) {
 				if len(target) != 0 {
 					t.Error("expected empty target")
 				}
@@ -799,7 +799,7 @@ func TestApplyMapOverrides(t *testing.T) {
 		},
 		{
 			name: "path segment exists but is not a map",
-			target: map[string]interface{}{
+			target: map[string]any{
 				"driver": "string-value",
 			},
 			overrides: map[string]string{
@@ -827,7 +827,7 @@ func TestConvertMapValue(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
-		want  interface{}
+		want  any
 	}{
 		{
 			name:  "converts true",
@@ -1059,14 +1059,14 @@ func TestNodeSelectorToMatchExpressions(t *testing.T) {
 	tests := []struct {
 		name         string
 		nodeSelector map[string]string
-		verify       func(t *testing.T, result []map[string]interface{})
+		verify       func(t *testing.T, result []map[string]any)
 	}{
 		{
 			name: "converts single selector",
 			nodeSelector: map[string]string{
 				"nodeGroup": "gpu-nodes",
 			},
-			verify: func(t *testing.T, result []map[string]interface{}) {
+			verify: func(t *testing.T, result []map[string]any) {
 				if len(result) != 1 {
 					t.Fatalf("expected 1 expression, got %d", len(result))
 				}
@@ -1092,7 +1092,7 @@ func TestNodeSelectorToMatchExpressions(t *testing.T) {
 				"nodeGroup":   "gpu-nodes",
 				"accelerator": "nvidia-h100",
 			},
-			verify: func(t *testing.T, result []map[string]interface{}) {
+			verify: func(t *testing.T, result []map[string]any) {
 				if len(result) != 2 {
 					t.Fatalf("expected 2 expressions, got %d", len(result))
 				}
@@ -1126,7 +1126,7 @@ func TestNodeSelectorToMatchExpressions(t *testing.T) {
 		{
 			name:         "returns nil for empty selector",
 			nodeSelector: map[string]string{},
-			verify: func(t *testing.T, result []map[string]interface{}) {
+			verify: func(t *testing.T, result []map[string]any) {
 				if result != nil {
 					t.Errorf("expected nil, got %v", result)
 				}
@@ -1135,7 +1135,7 @@ func TestNodeSelectorToMatchExpressions(t *testing.T) {
 		{
 			name:         "returns nil for nil selector",
 			nodeSelector: nil,
-			verify: func(t *testing.T, result []map[string]interface{}) {
+			verify: func(t *testing.T, result []map[string]any) {
 				if result != nil {
 					t.Errorf("expected nil, got %v", result)
 				}

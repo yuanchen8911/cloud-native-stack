@@ -92,9 +92,9 @@ Override snapshot-detected criteria:
 			}
 
 			// Parse output format
-			outFormat := serializer.Format(cmd.String("format"))
-			if outFormat.IsUnknown() {
-				return fmt.Errorf("unknown output format: %q", outFormat)
+			outFormat, err := parseOutputFormat(cmd)
+			if err != nil {
+				return err
 			}
 
 			// Create builder
@@ -103,7 +103,6 @@ Override snapshot-detected criteria:
 			)
 
 			var result *recipe.RecipeResult
-			var err error
 
 			// Check if using snapshot
 			snapFilePath := cmd.String("snapshot")

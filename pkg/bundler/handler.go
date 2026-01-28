@@ -16,23 +16,21 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/config"
 	"github.com/NVIDIA/cloud-native-stack/pkg/bundler/result"
+	"github.com/NVIDIA/cloud-native-stack/pkg/defaults"
 	cnserrors "github.com/NVIDIA/cloud-native-stack/pkg/errors"
 	"github.com/NVIDIA/cloud-native-stack/pkg/recipe"
 	"github.com/NVIDIA/cloud-native-stack/pkg/server"
 	"github.com/NVIDIA/cloud-native-stack/pkg/snapshotter"
 )
 
-const (
-	// DefaultBundleTimeout is the timeout for bundle generation.
-	// Bundle generation involves parallel file I/O and template rendering.
-	DefaultBundleTimeout = 60 * time.Second
-)
+// DefaultBundleTimeout is the timeout for bundle generation.
+// Exported for backwards compatibility; prefer using defaults.BundleHandlerTimeout.
+const DefaultBundleTimeout = defaults.BundleHandlerTimeout
 
 // HandleBundles processes bundle generation requests.
 // It accepts a POST request with a JSON body containing the recipe (RecipeResult).
@@ -59,7 +57,7 @@ func (b *DefaultBundler) HandleBundles(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
 		server.WriteError(w, r, http.StatusMethodNotAllowed, cnserrors.ErrCodeMethodNotAllowed,
-			"Method not allowed", false, map[string]interface{}{
+			"Method not allowed", false, map[string]any{
 				"method": r.Method,
 			})
 		return
@@ -81,7 +79,7 @@ func (b *DefaultBundler) HandleBundles(w http.ResponseWriter, r *http.Request) {
 	err = json.NewDecoder(r.Body).Decode(&recipeResult)
 	if err != nil {
 		server.WriteError(w, r, http.StatusBadRequest, cnserrors.ErrCodeInvalidRequest,
-			"Invalid request body", false, map[string]interface{}{
+			"Invalid request body", false, map[string]any{
 				"error": err.Error(),
 			})
 		return
@@ -132,7 +130,7 @@ func (b *DefaultBundler) HandleBundles(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		server.WriteError(w, r, http.StatusInternalServerError, cnserrors.ErrCodeInternal,
-			"Failed to create bundler", true, map[string]interface{}{
+			"Failed to create bundler", true, map[string]any{
 				"error": err.Error(),
 			})
 		return
@@ -147,15 +145,15 @@ func (b *DefaultBundler) HandleBundles(w http.ResponseWriter, r *http.Request) {
 
 	// Check for bundle errors
 	if output.HasErrors() {
-		errorDetails := make([]map[string]interface{}, 0, len(output.Errors))
+		errorDetails := make([]map[string]any, 0, len(output.Errors))
 		for _, be := range output.Errors {
-			errorDetails = append(errorDetails, map[string]interface{}{
+			errorDetails = append(errorDetails, map[string]any{
 				"bundler": be.BundlerType,
 				"error":   be.Error,
 			})
 		}
 		server.WriteError(w, r, http.StatusInternalServerError, cnserrors.ErrCodeInternal,
-			"Bundle generation failed", true, map[string]interface{}{
+			"Bundle generation failed", true, map[string]any{
 				"errors": errorDetails,
 			})
 		return

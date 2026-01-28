@@ -112,7 +112,7 @@ func TestBundleEndpointMissingRecipe(t *testing.T) {
 	}
 
 	// Verify error message
-	var resp map[string]interface{}
+	var resp map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestBundleEndpointEmptyComponentRefs(t *testing.T) {
 		t.Errorf("expected status %d, got %d", http.StatusBadRequest, w.Code)
 	}
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}

@@ -78,7 +78,7 @@ func TestTestHarness_TestMake(t *testing.T) {
 		WithExpectedFiles([]string{"test.txt"}).
 		WithRecipeBuilder(func() *RecipeBuilder {
 			return NewRecipeBuilder().WithK8sMeasurement(
-				ConfigSubtype(map[string]interface{}{"version": "1.28.0"}),
+				ConfigSubtype(map[string]any{"version": "1.28.0"}),
 			)
 		})
 
@@ -130,7 +130,7 @@ func TestTestHarness_getRecipe(t *testing.T) {
 		h := NewTestHarness(t, "test").
 			WithRecipeBuilder(func() *RecipeBuilder {
 				return NewRecipeBuilder().WithK8sMeasurement(
-					ConfigSubtype(map[string]interface{}{"custom": "value"}),
+					ConfigSubtype(map[string]any{"custom": "value"}),
 				)
 			})
 
@@ -179,7 +179,7 @@ func TestRecipeBuilder_NewRecipeBuilder(t *testing.T) {
 func TestRecipeBuilder_WithK8sMeasurement(t *testing.T) {
 	rb := NewRecipeBuilder().
 		WithK8sMeasurement(
-			ConfigSubtype(map[string]interface{}{"version": "1.28.0"}),
+			ConfigSubtype(map[string]any{"version": "1.28.0"}),
 		)
 
 	rec := rb.Build()
@@ -209,7 +209,7 @@ func TestRecipeBuilder_WithGPUMeasurement(t *testing.T) {
 func TestRecipeBuilder_WithOSMeasurement(t *testing.T) {
 	rb := NewRecipeBuilder().
 		WithOSMeasurement(
-			ConfigSubtype(map[string]interface{}{"kernel": "5.15"}),
+			ConfigSubtype(map[string]any{"kernel": "5.15"}),
 		)
 
 	rec := rb.Build()
@@ -224,7 +224,7 @@ func TestRecipeBuilder_WithOSMeasurement(t *testing.T) {
 func TestRecipeBuilder_WithSystemDMeasurement(t *testing.T) {
 	rb := NewRecipeBuilder().
 		WithSystemDMeasurement(
-			ConfigSubtype(map[string]interface{}{"service": "containerd"}),
+			ConfigSubtype(map[string]any{"service": "containerd"}),
 		)
 
 	rec := rb.Build()
@@ -239,7 +239,7 @@ func TestRecipeBuilder_WithSystemDMeasurement(t *testing.T) {
 func TestRecipeBuilder_Build(t *testing.T) {
 	rb := NewRecipeBuilder().
 		WithK8sMeasurement(
-			ConfigSubtype(map[string]interface{}{"version": "1.28.0"}),
+			ConfigSubtype(map[string]any{"version": "1.28.0"}),
 		).
 		WithGPUMeasurement(
 			SMISubtype(map[string]string{"driver": "580"}),
@@ -270,7 +270,7 @@ func TestImageSubtype(t *testing.T) {
 }
 
 func TestConfigSubtype(t *testing.T) {
-	configs := map[string]interface{}{
+	configs := map[string]any{
 		"string_val": "test",
 		"bool_val":   true,
 		"int_val":    42,

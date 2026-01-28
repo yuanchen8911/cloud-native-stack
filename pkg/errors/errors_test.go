@@ -36,7 +36,7 @@ func TestWrap(t *testing.T) {
 
 func TestWrapWithContext(t *testing.T) {
 	cause := errors.New("timeout")
-	ctx := map[string]interface{}{
+	ctx := map[string]any{
 		"command": "nvidia-smi",
 		"node":    "node-1",
 	}

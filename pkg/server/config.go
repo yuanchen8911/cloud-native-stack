@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/NVIDIA/cloud-native-stack/pkg/defaults"
 	"golang.org/x/time/rate"
 )
 
@@ -52,10 +53,10 @@ func parseConfig() *Config {
 		RateLimit:       100, // 100 req/s
 		RateLimitBurst:  200, // burst of 200
 		MaxBulkRequests: 100,
-		ReadTimeout:     10 * time.Second,
-		WriteTimeout:    30 * time.Second,
-		IdleTimeout:     120 * time.Second,
-		ShutdownTimeout: 30 * time.Second,
+		ReadTimeout:     defaults.ServerReadTimeout,
+		WriteTimeout:    defaults.ServerWriteTimeout,
+		IdleTimeout:     defaults.ServerIdleTimeout,
+		ShutdownTimeout: defaults.ServerShutdownTimeout,
 	}
 
 	// Override with environment variables if set

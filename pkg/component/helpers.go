@@ -30,7 +30,7 @@ func NewTemplateRenderer(getter func(name string) (string, bool)) *TemplateRende
 }
 
 // Render renders a template with the given data.
-func (r *TemplateRenderer) Render(name string, data map[string]interface{}) (string, error) {
+func (r *TemplateRenderer) Render(name string, data map[string]any) (string, error) {
 	tmplContent, ok := r.templateGetter(name)
 	if !ok {
 		return "", fmt.Errorf("template %s not found", name)
@@ -198,7 +198,7 @@ func (g *ChecksumGenerator) Generate(outputDir, title string) (string, error) {
 }
 
 // MarshalYAML serializes a value to YAML format.
-func MarshalYAML(v interface{}) ([]byte, error) {
+func MarshalYAML(v any) ([]byte, error) {
 	// Import yaml package inline to avoid adding it as a top-level dependency
 	// for packages that don't need it
 	var buf bytes.Buffer
@@ -218,7 +218,7 @@ type ValuesHeader struct {
 }
 
 // MarshalYAMLWithHeader serializes a value to YAML format with a metadata header.
-func MarshalYAMLWithHeader(v interface{}, header ValuesHeader) ([]byte, error) {
+func MarshalYAMLWithHeader(v any, header ValuesHeader) ([]byte, error) {
 	var buf bytes.Buffer
 
 	// Write header comments

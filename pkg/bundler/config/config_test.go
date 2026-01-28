@@ -80,8 +80,8 @@ func TestAllGetters(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		got      interface{}
-		want     interface{}
+		got      any
+		want     any
 		getterFn string
 	}{
 		{"IncludeReadme", cfg.IncludeReadme(), true, "IncludeReadme()"},

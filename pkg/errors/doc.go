@@ -36,7 +36,7 @@
 //	    errors.ErrCodeTimeout,
 //	    "failed to collect GPU metrics",
 //	    ctx.Err(),
-//	    map[string]interface{}{
+//	    map[string]any{
 //	        "command":  "nvidia-smi",
 //	        "node":     nodeName,
 //	        "timeout":  "10s",

@@ -78,7 +78,7 @@ func TestWriter_SerializeTable(t *testing.T) {
 	var buf bytes.Buffer
 	writer := NewWriter(FormatTable, &buf)
 
-	data := []interface{}{
+	data := []any{
 		testConfig{Name: test1Name, Value: 123},
 		testConfig{Name: "test2", Value: 456},
 	}
@@ -384,7 +384,7 @@ func TestWriter_SerializeTable_Maps(t *testing.T) {
 	var buf bytes.Buffer
 	writer := NewWriter(FormatTable, &buf)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"key1": "value1",
 		"key2": 123,
 		"key3": true,
@@ -505,7 +505,7 @@ func Test_serializeJSON(t *testing.T) {
 			}
 			// Verify it's valid JSON by unmarshaling
 			if !tt.wantErr && tt.data != nil {
-				var result interface{}
+				var result any
 				if err := json.Unmarshal(got, &result); err != nil {
 					t.Errorf("serializeJSON() produced invalid JSON: %v", err)
 				}
@@ -559,7 +559,7 @@ func Test_serializeYAML(t *testing.T) {
 			}
 			// Verify it's valid YAML by unmarshaling
 			if !tt.wantErr && tt.data != nil {
-				var result interface{}
+				var result any
 				if err := yaml.Unmarshal(got, &result); err != nil {
 					t.Errorf("serializeYAML() produced invalid YAML: %v", err)
 				}

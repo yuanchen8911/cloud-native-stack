@@ -108,7 +108,7 @@ func (a *AllowLists) ValidateCriteria(c *Criteria) error {
 				cnserrors.ErrCodeInvalidRequest,
 				"accelerator type not allowed",
 				nil,
-				map[string]interface{}{
+				map[string]any{
 					"requested": string(c.Accelerator),
 					"allowed":   acceleratorTypesToStrings(a.Accelerators),
 				},
@@ -123,7 +123,7 @@ func (a *AllowLists) ValidateCriteria(c *Criteria) error {
 				cnserrors.ErrCodeInvalidRequest,
 				"service type not allowed",
 				nil,
-				map[string]interface{}{
+				map[string]any{
 					"requested": string(c.Service),
 					"allowed":   serviceTypesToStrings(a.Services),
 				},
@@ -138,7 +138,7 @@ func (a *AllowLists) ValidateCriteria(c *Criteria) error {
 				cnserrors.ErrCodeInvalidRequest,
 				"intent type not allowed",
 				nil,
-				map[string]interface{}{
+				map[string]any{
 					"requested": string(c.Intent),
 					"allowed":   intentTypesToStrings(a.Intents),
 				},
@@ -153,7 +153,7 @@ func (a *AllowLists) ValidateCriteria(c *Criteria) error {
 				cnserrors.ErrCodeInvalidRequest,
 				"OS type not allowed",
 				nil,
-				map[string]interface{}{
+				map[string]any{
 					"requested": string(c.OS),
 					"allowed":   osTypesToStrings(a.OSTypes),
 				},
@@ -184,7 +184,7 @@ func ParseAllowListsFromEnv() (*AllowLists, error) {
 				cnserrors.ErrCodeInvalidRequest,
 				"invalid "+EnvAllowedAccelerators,
 				err,
-				map[string]interface{}{"value": v},
+				map[string]any{"value": v},
 			)
 		}
 		al.Accelerators = accelerators
@@ -198,7 +198,7 @@ func ParseAllowListsFromEnv() (*AllowLists, error) {
 				cnserrors.ErrCodeInvalidRequest,
 				"invalid "+EnvAllowedServices,
 				err,
-				map[string]interface{}{"value": v},
+				map[string]any{"value": v},
 			)
 		}
 		al.Services = services
@@ -212,7 +212,7 @@ func ParseAllowListsFromEnv() (*AllowLists, error) {
 				cnserrors.ErrCodeInvalidRequest,
 				"invalid "+EnvAllowedIntents,
 				err,
-				map[string]interface{}{"value": v},
+				map[string]any{"value": v},
 			)
 		}
 		al.Intents = intents
@@ -226,7 +226,7 @@ func ParseAllowListsFromEnv() (*AllowLists, error) {
 				cnserrors.ErrCodeInvalidRequest,
 				"invalid "+EnvAllowedOSTypes,
 				err,
-				map[string]interface{}{"value": v},
+				map[string]any{"value": v},
 			)
 		}
 		al.OSTypes = osTypes

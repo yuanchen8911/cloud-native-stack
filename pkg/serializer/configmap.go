@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/cloud-native-stack/pkg/defaults"
 	"github.com/NVIDIA/cloud-native-stack/pkg/header"
 	"github.com/NVIDIA/cloud-native-stack/pkg/k8s/client"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -43,7 +44,7 @@ func NewConfigMapWriter(namespace, name string, format Format) *ConfigMapWriter 
 func (w *ConfigMapWriter) Serialize(ctx context.Context, snapshot any) error {
 	// Create context with timeout for Kubernetes API operations
 	// Use longer timeout to accommodate rate limiter after heavy API usage
-	writeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	writeCtx, cancel := context.WithTimeout(ctx, defaults.ConfigMapWriteTimeout)
 	defer cancel()
 
 	client, config, err := client.GetKubeClient()

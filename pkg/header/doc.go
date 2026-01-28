@@ -18,7 +18,7 @@
 //	type Metadata struct {
 //	    Created time.Time              `json:"created" yaml:"created"`       // Creation timestamp
 //	    Version string                 `json:"version,omitempty" yaml:"version,omitempty"` // Tool version
-//	    Custom  map[string]interface{} `json:"custom,omitempty" yaml:"custom,omitempty"`   // Custom fields
+//	    Custom  map[string]any `json:"custom,omitempty" yaml:"custom,omitempty"`   // Custom fields
 //	}
 //
 // # Usage
@@ -42,7 +42,7 @@
 //	    Metadata: &header.Metadata{
 //	        Created: time.Now(),
 //	        Version: "v1.0.0",
-//	        Custom: map[string]interface{}{
+//	        Custom: map[string]any{
 //	            "node": "gpu-node-1",
 //	            "cluster": "production",
 //	        },
@@ -85,7 +85,7 @@
 //
 // Custom fields enable extensibility without API version changes:
 //
-//	metadata.Custom = map[string]interface{}{
+//	metadata.Custom = map[string]any{
 //	    "node": "gpu-node-1",
 //	    "cluster": "production",
 //	    "environment": "staging",

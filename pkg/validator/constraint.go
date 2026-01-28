@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/NVIDIA/cloud-native-stack/pkg/errors"
 	"github.com/NVIDIA/cloud-native-stack/pkg/version"
 )
 
@@ -58,7 +59,7 @@ type ParsedConstraint struct {
 func ParseConstraintExpression(expr string) (*ParsedConstraint, error) {
 	expr = strings.TrimSpace(expr)
 	if expr == "" {
-		return nil, fmt.Errorf("constraint expression cannot be empty")
+		return nil, errors.New(errors.ErrCodeInvalidRequest, "constraint expression cannot be empty")
 	}
 
 	pc := &ParsedConstraint{}
@@ -80,7 +81,7 @@ func ParseConstraintExpression(expr string) (*ParsedConstraint, error) {
 	}
 
 	if pc.Value == "" {
-		return nil, fmt.Errorf("constraint value cannot be empty after operator")
+		return nil, errors.New(errors.ErrCodeInvalidRequest, "constraint value cannot be empty after operator")
 	}
 
 	// Determine if this is a version comparison (operators other than exact match with version-like value)
@@ -155,12 +156,14 @@ func (pc *ParsedConstraint) Evaluate(actual string) (bool, error) {
 		// Version comparison required
 		expectedVer, err := version.ParseVersion(pc.Value)
 		if err != nil {
-			return false, fmt.Errorf("cannot parse expected version %q: %w", pc.Value, err)
+			return false, errors.WrapWithContext(errors.ErrCodeInvalidRequest,
+				"cannot parse expected version", err, map[string]any{"version": pc.Value})
 		}
 
 		actualVer, err := version.ParseVersion(actual)
 		if err != nil {
-			return false, fmt.Errorf("cannot parse actual version %q: %w", actual, err)
+			return false, errors.WrapWithContext(errors.ErrCodeInvalidRequest,
+				"cannot parse actual version", err, map[string]any{"version": actual})
 		}
 
 		cmp := actualVer.Compare(expectedVer)
@@ -177,10 +180,12 @@ func (pc *ParsedConstraint) Evaluate(actual string) (bool, error) {
 			return cmp < 0, nil
 		default:
 			// This shouldn't happen as this case only handles comparison operators
-			return false, fmt.Errorf("unexpected operator in version comparison: %q", pc.Operator)
+			return false, errors.NewWithContext(errors.ErrCodeInternal,
+				"unexpected operator in version comparison", map[string]any{"operator": pc.Operator})
 		}
 	default:
-		return false, fmt.Errorf("unknown operator: %q", pc.Operator)
+		return false, errors.NewWithContext(errors.ErrCodeInvalidRequest,
+			"unknown operator", map[string]any{"operator": pc.Operator})
 	}
 }
 

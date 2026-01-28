@@ -72,7 +72,7 @@ func Execute() {
 			cmd.Category = "Utilities"
 			cmd.Usage = "Output shell completion script for a given shell."
 		},
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"git-commit": commit,
 			"build-date": date,
 		},

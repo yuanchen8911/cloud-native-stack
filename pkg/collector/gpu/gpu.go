@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/NVIDIA/cloud-native-stack/pkg/defaults"
 	"github.com/NVIDIA/cloud-native-stack/pkg/measurement"
 )
 
@@ -32,9 +33,9 @@ func (s *Collector) Collect(ctx context.Context) (*measurement.Measurement, erro
 		return noGPUMeasurement(), nil
 	}
 
-	// Use parent context deadline if it's sooner than our default 10s timeout
+	// Use parent context deadline if it's sooner than our default timeout
 	deadline, ok := ctx.Deadline()
-	timeout := 10 * time.Second
+	timeout := defaults.CollectorTimeout
 	if ok {
 		remaining := time.Until(deadline)
 		if remaining < timeout && remaining > 0 {

@@ -248,7 +248,7 @@ func RegistrySubtype(registry map[string]string) measurement.Subtype {
 }
 
 // ConfigSubtype creates a config subtype with common config data.
-func ConfigSubtype(configs map[string]interface{}) measurement.Subtype {
+func ConfigSubtype(configs map[string]any) measurement.Subtype {
 	data := make(map[string]measurement.Reading)
 	for k, v := range configs {
 		switch val := v.(type) {
@@ -338,7 +338,7 @@ func TestValidateRecipe(t *testing.T, validateFunc func(*recipe.Recipe) error) {
 		{
 			name: "valid recipe",
 			recipe: NewRecipeBuilder().
-				WithK8sMeasurement(ConfigSubtype(map[string]interface{}{
+				WithK8sMeasurement(ConfigSubtype(map[string]any{
 					"version": "1.28.0",
 				})).
 				Build(),
@@ -381,7 +381,7 @@ func NewRecipeResultBuilder() *RecipeResultBuilder {
 }
 
 // WithComponent adds a component reference with inline overrides.
-func (rb *RecipeResultBuilder) WithComponent(name, version string, overrides map[string]interface{}) *RecipeResultBuilder {
+func (rb *RecipeResultBuilder) WithComponent(name, version string, overrides map[string]any) *RecipeResultBuilder {
 	rb.componentRefs = append(rb.componentRefs, recipe.ComponentRef{
 		Name:      name,
 		Version:   version,
@@ -391,7 +391,7 @@ func (rb *RecipeResultBuilder) WithComponent(name, version string, overrides map
 }
 
 // WithComponentAndSource adds a component reference with source and inline overrides.
-func (rb *RecipeResultBuilder) WithComponentAndSource(name, version, source string, overrides map[string]interface{}) *RecipeResultBuilder {
+func (rb *RecipeResultBuilder) WithComponentAndSource(name, version, source string, overrides map[string]any) *RecipeResultBuilder {
 	rb.componentRefs = append(rb.componentRefs, recipe.ComponentRef{
 		Name:      name,
 		Version:   version,
@@ -445,7 +445,7 @@ type StandardBundlerTestConfig struct {
 	ExpectedFiles []string
 
 	// DefaultOverrides are the default values to use in test recipes.
-	DefaultOverrides map[string]interface{}
+	DefaultOverrides map[string]any
 }
 
 // RunStandardBundlerTests runs all standard tests for a bundler.
@@ -565,10 +565,10 @@ func runMakeTests(t *testing.T, cfg StandardBundlerTestConfig) {
 }
 
 // createStandardTestRecipeResult creates a test RecipeResult with the given component.
-func createStandardTestRecipeResult(componentName string, overrides map[string]interface{}) *recipe.RecipeResult {
+func createStandardTestRecipeResult(componentName string, overrides map[string]any) *recipe.RecipeResult {
 	if overrides == nil {
-		overrides = map[string]interface{}{
-			"operator": map[string]interface{}{
+		overrides = map[string]any{
+			"operator": map[string]any{
 				"version": "v25.3.4",
 			},
 		}

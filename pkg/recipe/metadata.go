@@ -46,7 +46,7 @@ type ComponentRef struct {
 
 	// Overrides contains inline values that override those from ValuesFile.
 	// Merge order: base values → ValuesFile → Overrides (highest precedence).
-	Overrides map[string]interface{} `json:"overrides,omitempty" yaml:"overrides,omitempty"`
+	Overrides map[string]any `json:"overrides,omitempty" yaml:"overrides,omitempty"`
 
 	// Patches is a list of patch files to apply (for Kustomize).
 	Patches []string `json:"patches,omitempty" yaml:"patches,omitempty"`
@@ -280,7 +280,7 @@ func mergeComponentRef(base, overlay ComponentRef) ComponentRef {
 	// Overrides: merge maps, overlay takes precedence
 	if len(overlay.Overrides) > 0 {
 		if result.Overrides == nil {
-			result.Overrides = make(map[string]interface{})
+			result.Overrides = make(map[string]any)
 		}
 		for k, v := range overlay.Overrides {
 			result.Overrides[k] = v

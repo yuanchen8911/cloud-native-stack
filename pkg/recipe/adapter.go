@@ -34,7 +34,7 @@ type RecipeInput interface {
 	// GetValuesForComponent returns the values map for a given component.
 	// For Recipe, this extracts values from measurements.
 	// For RecipeResult, this loads values from the component's valuesFile.
-	GetValuesForComponent(name string) (map[string]interface{}, error)
+	GetValuesForComponent(name string) (map[string]any, error)
 
 	// GetVersion returns the recipe version (CLI version that generated the recipe).
 	// Returns empty string if version is not available.
@@ -55,10 +55,10 @@ func (r *Recipe) GetComponentRef(name string) *ComponentRef {
 
 // GetValuesForComponent extracts values from measurements for Recipe.
 // This maintains backward compatibility with the legacy measurements-based format.
-func (r *Recipe) GetValuesForComponent(name string) (map[string]interface{}, error) {
+func (r *Recipe) GetValuesForComponent(name string) (map[string]any, error) {
 	// For legacy Recipe, values are embedded in measurements
 	// This is a no-op - bundlers extract their own values from measurements
-	return make(map[string]interface{}), nil
+	return make(map[string]any), nil
 }
 
 // GetVersion returns the recipe version from metadata.
@@ -103,14 +103,14 @@ func (r *RecipeResult) GetComponentRef(name string) *ComponentRef {
 //  1. ValuesFile only: Traditional separate file approach
 //  2. Overrides only: Fully self-contained recipe with inline overrides
 //  3. ValuesFile + Overrides: Hybrid - reusable base with recipe-specific tweaks
-func (r *RecipeResult) GetValuesForComponent(name string) (map[string]interface{}, error) {
+func (r *RecipeResult) GetValuesForComponent(name string) (map[string]any, error) {
 	ref := r.GetComponentRef(name)
 	if ref == nil {
 		return nil, fmt.Errorf("component %q not found in recipe", name)
 	}
 
 	// Start with empty result
-	result := make(map[string]interface{})
+	result := make(map[string]any)
 
 	// If no valuesFile and no overrides, return empty map
 	if ref.ValuesFile == "" && len(ref.Overrides) == 0 {
@@ -130,7 +130,7 @@ func (r *RecipeResult) GetValuesForComponent(name string) (map[string]interface{
 			baseData, err := provider.ReadFile(baseValuesFile)
 			if err != nil {
 				// If base file doesn't exist, that's okay - just use overlay
-				result = make(map[string]interface{})
+				result = make(map[string]any)
 			} else {
 				err = yaml.Unmarshal(baseData, &result)
 				if err != nil {
@@ -144,7 +144,7 @@ func (r *RecipeResult) GetValuesForComponent(name string) (map[string]interface{
 				return nil, fmt.Errorf("failed to read overlay values file %q: %w", ref.ValuesFile, err)
 			}
 
-			var overlayValues map[string]interface{}
+			var overlayValues map[string]any
 			if err := yaml.Unmarshal(overlayData, &overlayValues); err != nil {
 				return nil, fmt.Errorf("failed to parse overlay values file %q: %w", ref.ValuesFile, err)
 			}
@@ -175,12 +175,12 @@ func (r *RecipeResult) GetValuesForComponent(name string) (map[string]interface{
 // mergeValues recursively merges src into dst.
 // For maps, it recursively merges nested keys.
 // For other types, src values override dst values.
-func mergeValues(dst, src map[string]interface{}) {
+func mergeValues(dst, src map[string]any) {
 	for key, srcVal := range src {
 		if dstVal, exists := dst[key]; exists {
 			// If both are maps, merge recursively
-			if dstMap, dstOK := dstVal.(map[string]interface{}); dstOK {
-				if srcMap, srcOK := srcVal.(map[string]interface{}); srcOK {
+			if dstMap, dstOK := dstVal.(map[string]any); dstOK {
+				if srcMap, srcOK := srcVal.(map[string]any); srcOK {
 					mergeValues(dstMap, srcMap)
 					continue
 				}

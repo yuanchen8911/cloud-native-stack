@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/NVIDIA/cloud-native-stack/pkg/errors"
 	"github.com/NVIDIA/cloud-native-stack/pkg/header"
 	"github.com/NVIDIA/cloud-native-stack/pkg/recipe"
 	"github.com/NVIDIA/cloud-native-stack/pkg/snapshotter"
@@ -43,14 +44,14 @@ func EvaluateConstraint(constraint recipe.Constraint, snap *snapshotter.Snapshot
 	// Parse the constraint path
 	path, err := ParseConstraintPath(constraint.Name)
 	if err != nil {
-		result.Error = fmt.Errorf("invalid constraint path: %w", err)
+		result.Error = errors.Wrap(errors.ErrCodeInvalidRequest, "invalid constraint path", err)
 		return result
 	}
 
 	// Extract the actual value from snapshot
 	actual, err := path.ExtractValue(snap)
 	if err != nil {
-		result.Error = fmt.Errorf("value not found in snapshot: %w", err)
+		result.Error = errors.Wrap(errors.ErrCodeNotFound, "value not found in snapshot", err)
 		return result
 	}
 	result.Actual = actual
@@ -58,14 +59,14 @@ func EvaluateConstraint(constraint recipe.Constraint, snap *snapshotter.Snapshot
 	// Parse the constraint expression
 	parsed, err := ParseConstraintExpression(constraint.Value)
 	if err != nil {
-		result.Error = fmt.Errorf("invalid constraint expression: %w", err)
+		result.Error = errors.Wrap(errors.ErrCodeInvalidRequest, "invalid constraint expression", err)
 		return result
 	}
 
 	// Evaluate the constraint
 	passed, err := parsed.Evaluate(actual)
 	if err != nil {
-		result.Error = fmt.Errorf("evaluation failed: %w", err)
+		result.Error = errors.Wrap(errors.ErrCodeInternal, "evaluation failed", err)
 		return result
 	}
 
@@ -104,10 +105,10 @@ func (v *Validator) Validate(ctx context.Context, recipeResult *recipe.RecipeRes
 	start := time.Now()
 
 	if recipeResult == nil {
-		return nil, fmt.Errorf("recipe cannot be nil")
+		return nil, errors.New(errors.ErrCodeInvalidRequest, "recipe cannot be nil")
 	}
 	if snap == nil {
-		return nil, fmt.Errorf("snapshot cannot be nil")
+		return nil, errors.New(errors.ErrCodeInvalidRequest, "snapshot cannot be nil")
 	}
 
 	result := NewValidationResult()

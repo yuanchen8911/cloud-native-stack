@@ -62,7 +62,7 @@
 //
 //	var componentConfig = component.ComponentConfig{
 //	    // ... other fields ...
-//	    MetadataExtensions: map[string]interface{}{
+//	    MetadataExtensions: map[string]any{
 //	        "InstallCRDs":   true,
 //	        "CustomField":   "custom-value",
 //	    },
@@ -81,7 +81,7 @@
 //	var componentConfig = component.ComponentConfig{
 //	    // ... other fields ...
 //	    CustomManifestFunc: func(ctx context.Context, b *component.BaseBundler,
-//	        values map[string]interface{}, configMap map[string]string, dir string) ([]string, error) {
+//	        values map[string]any, configMap map[string]string, dir string) ([]string, error) {
 //	        // Generate manifests using b.WriteFile() or b.GenerateFileFromTemplate()
 //	        return []string{"manifests/custom.yaml"}, nil
 //	    },

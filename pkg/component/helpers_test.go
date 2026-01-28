@@ -26,21 +26,21 @@ func TestTemplateRenderer_Render(t *testing.T) {
 	tests := []struct {
 		name     string
 		tmplName string
-		data     map[string]interface{}
+		data     map[string]any
 		want     string
 		wantErr  bool
 	}{
 		{
 			name:     "renders template",
 			tmplName: "test",
-			data:     map[string]interface{}{"Name": "World"},
+			data:     map[string]any{"Name": "World"},
 			want:     "Hello World!",
 			wantErr:  false,
 		},
 		{
 			name:     "template not found",
 			tmplName: "missing",
-			data:     map[string]interface{}{},
+			data:     map[string]any{},
 			want:     "",
 			wantErr:  true,
 		},
@@ -475,7 +475,7 @@ func TestExtractCustomAnnotations(t *testing.T) {
 func TestMarshalYAML(t *testing.T) {
 	tests := []struct {
 		name    string
-		value   interface{}
+		value   any
 		want    string
 		wantErr bool
 	}{
@@ -575,7 +575,7 @@ func TestParseBoolString(t *testing.T) {
 func TestMarshalYAMLWithHeader(t *testing.T) {
 	tests := []struct {
 		name    string
-		value   interface{}
+		value   any
 		header  ValuesHeader
 		verify  func(t *testing.T, result string)
 		wantErr bool
@@ -622,12 +622,12 @@ func TestMarshalYAMLWithHeader(t *testing.T) {
 		},
 		{
 			name: "handles complex nested structure",
-			value: map[string]interface{}{
-				"driver": map[string]interface{}{
+			value: map[string]any{
+				"driver": map[string]any{
 					"version": "550.0.0",
 					"enabled": true,
 				},
-				"mig": map[string]interface{}{
+				"mig": map[string]any{
 					"strategy": "mixed",
 				},
 			},

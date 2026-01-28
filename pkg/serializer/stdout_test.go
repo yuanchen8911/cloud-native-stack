@@ -20,7 +20,7 @@ func TestStdoutSerializer_Serialize(t *testing.T) {
 	}()
 
 	serializer := &StdoutSerializer{}
-	data := map[string]interface{}{
+	data := map[string]any{
 		"key":   "value",
 		"count": 42,
 	}
@@ -36,7 +36,7 @@ func TestStdoutSerializer_Serialize(t *testing.T) {
 	io.Copy(&buf, r)
 
 	// Verify it's valid JSON
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
 		t.Fatalf("failed to unmarshal output: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestStdoutSerializer_EmptyStruct(t *testing.T) {
 	io.Copy(&buf, r)
 
 	// Empty struct serializes to {}
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
 		t.Fatalf("failed to unmarshal output: %v", err)
 	}

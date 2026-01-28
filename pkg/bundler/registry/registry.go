@@ -26,7 +26,7 @@ type ValuesExtractor interface {
 	// ExtractValues returns the processed values map for this component.
 	// This includes base values, overlay merging, and user overrides applied.
 	// Returns the component name and values map.
-	ExtractValues(ctx context.Context, input recipe.RecipeInput) (componentName string, values map[string]interface{}, err error)
+	ExtractValues(ctx context.Context, input recipe.RecipeInput) (componentName string, values map[string]any, err error)
 }
 
 // Factory is a function that creates a new Bundler instance.

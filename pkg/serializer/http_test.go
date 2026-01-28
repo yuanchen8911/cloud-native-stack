@@ -107,7 +107,7 @@ func TestRespondJSON_ComplexData(t *testing.T) {
 		Field2 int
 	}
 
-	complexData := map[string]interface{}{
+	complexData := map[string]any{
 		"string": "value",
 		"number": 42,
 		"bool":   true,
@@ -123,7 +123,7 @@ func TestRespondJSON_ComplexData(t *testing.T) {
 	}
 
 	// Verify it's valid JSON
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatalf("failed to unmarshal complex response: %v", err)
 	}
@@ -376,7 +376,7 @@ func TestHttpReader_Read_InvalidURL(t *testing.T) {
 }
 
 func TestHttpReader_Read_JSONResponse(t *testing.T) {
-	testResponse := map[string]interface{}{
+	testResponse := map[string]any{
 		"message": "success",
 		"code":    200,
 	}
@@ -392,7 +392,7 @@ func TestHttpReader_Read_JSONResponse(t *testing.T) {
 		t.Fatalf("Read() failed: %v", err)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(data, &result); err != nil {
 		t.Fatalf("failed to unmarshal JSON response: %v", err)
 	}

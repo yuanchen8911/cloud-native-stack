@@ -8,40 +8,40 @@ import (
 func TestMergeValues(t *testing.T) {
 	tests := []struct {
 		name     string
-		base     map[string]interface{}
-		overlay  map[string]interface{}
-		expected map[string]interface{}
+		base     map[string]any
+		overlay  map[string]any
+		expected map[string]any
 	}{
 		{
 			name: "simple override",
-			base: map[string]interface{}{
+			base: map[string]any{
 				"enabled": true,
 				"version": "1.0.0",
 			},
-			overlay: map[string]interface{}{
+			overlay: map[string]any{
 				"version": "2.0.0",
 			},
-			expected: map[string]interface{}{
+			expected: map[string]any{
 				"enabled": true,
 				"version": "2.0.0",
 			},
 		},
 		{
 			name: "nested map merge",
-			base: map[string]interface{}{
-				"driver": map[string]interface{}{
+			base: map[string]any{
+				"driver": map[string]any{
 					"enabled":    true,
 					"repository": "nvcr.io/nvidia",
 					"version":    "1.0.0",
 				},
 			},
-			overlay: map[string]interface{}{
-				"driver": map[string]interface{}{
+			overlay: map[string]any{
+				"driver": map[string]any{
 					"version": "2.0.0",
 				},
 			},
-			expected: map[string]interface{}{
-				"driver": map[string]interface{}{
+			expected: map[string]any{
+				"driver": map[string]any{
 					"enabled":    true,
 					"repository": "nvcr.io/nvidia",
 					"version":    "2.0.0",
@@ -50,37 +50,37 @@ func TestMergeValues(t *testing.T) {
 		},
 		{
 			name: "add new key",
-			base: map[string]interface{}{
+			base: map[string]any{
 				"enabled": true,
 			},
-			overlay: map[string]interface{}{
+			overlay: map[string]any{
 				"newFeature": true,
 			},
-			expected: map[string]interface{}{
+			expected: map[string]any{
 				"enabled":    true,
 				"newFeature": true,
 			},
 		},
 		{
 			name: "deep nested merge",
-			base: map[string]interface{}{
-				"driver": map[string]interface{}{
-					"config": map[string]interface{}{
+			base: map[string]any{
+				"driver": map[string]any{
+					"config": map[string]any{
 						"timeout": 30,
 						"retry":   3,
 					},
 				},
 			},
-			overlay: map[string]interface{}{
-				"driver": map[string]interface{}{
-					"config": map[string]interface{}{
+			overlay: map[string]any{
+				"driver": map[string]any{
+					"config": map[string]any{
 						"timeout": 60,
 					},
 				},
 			},
-			expected: map[string]interface{}{
-				"driver": map[string]interface{}{
-					"config": map[string]interface{}{
+			expected: map[string]any{
+				"driver": map[string]any{
+					"config": map[string]any{
 						"timeout": 60,
 						"retry":   3,
 					},
@@ -89,15 +89,15 @@ func TestMergeValues(t *testing.T) {
 		},
 		{
 			name: "type mismatch - overlay wins",
-			base: map[string]interface{}{
-				"value": map[string]interface{}{
+			base: map[string]any{
+				"value": map[string]any{
 					"nested": "data",
 				},
 			},
-			overlay: map[string]interface{}{
+			overlay: map[string]any{
 				"value": "string",
 			},
-			expected: map[string]interface{}{
+			expected: map[string]any{
 				"value": "string",
 			},
 		},
@@ -106,7 +106,7 @@ func TestMergeValues(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a copy of base to avoid modifying the test data
-			dst := make(map[string]interface{})
+			dst := make(map[string]any)
 			for k, v := range tt.base {
 				dst[k] = v
 			}
@@ -123,7 +123,7 @@ func TestMergeValues(t *testing.T) {
 }
 
 // mapsEqual compares two maps recursively.
-func mapsEqual(a, b map[string]interface{}) bool {
+func mapsEqual(a, b map[string]any) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -135,8 +135,8 @@ func mapsEqual(a, b map[string]interface{}) bool {
 		}
 
 		// If both are maps, compare recursively
-		if aMap, aOK := aVal.(map[string]interface{}); aOK {
-			if bMap, bOK := bVal.(map[string]interface{}); bOK {
+		if aMap, aOK := aVal.(map[string]any); aOK {
+			if bMap, bOK := bVal.(map[string]any); bOK {
 				if !mapsEqual(aMap, bMap) {
 					return false
 				}
@@ -173,14 +173,14 @@ func TestGetValuesForComponent_InlineOverrides(t *testing.T) {
 						{
 							Name:    "gpu-operator",
 							Version: "v25.3.4",
-							Overrides: map[string]interface{}{
-								"driver": map[string]interface{}{
+							Overrides: map[string]any{
+								"driver": map[string]any{
 									"version": "570.86.16",
 								},
-								"gdrcopy": map[string]interface{}{
+								"gdrcopy": map[string]any{
 									"enabled": true,
 								},
-								"gds": map[string]interface{}{
+								"gds": map[string]any{
 									"enabled": true,
 								},
 							},
@@ -205,9 +205,9 @@ func TestGetValuesForComponent_InlineOverrides(t *testing.T) {
 							Name:       "gpu-operator",
 							Version:    "v25.3.4",
 							ValuesFile: "components/gpu-operator/values.yaml",
-							Overrides: map[string]interface{}{
+							Overrides: map[string]any{
 								// Override just the driver version
-								"driver": map[string]interface{}{
+								"driver": map[string]any{
 									"version": "570.86.16",
 								},
 							},
@@ -248,8 +248,8 @@ func TestGetValuesForComponent_InlineOverrides(t *testing.T) {
 							Name:       "gpu-operator",
 							Version:    "v25.3.4",
 							ValuesFile: "components/gpu-operator/values.yaml", // driver: 550.54.15
-							Overrides: map[string]interface{}{
-								"driver": map[string]interface{}{
+							Overrides: map[string]any{
+								"driver": map[string]any{
 									"version": "999.99.99", // Override with different version
 								},
 							},
@@ -293,7 +293,7 @@ func TestGetValuesForComponent_InlineOverrides(t *testing.T) {
 
 			// Verify driver version if specified
 			if tt.wantDriver != "" {
-				driver, ok := values["driver"].(map[string]interface{})
+				driver, ok := values["driver"].(map[string]any)
 				if !ok {
 					t.Fatalf("driver not found or not a map")
 				}
@@ -308,7 +308,7 @@ func TestGetValuesForComponent_InlineOverrides(t *testing.T) {
 
 			// Verify gdrcopy if specified
 			if tt.wantGDRCopy {
-				gdrcopy, ok := values["gdrcopy"].(map[string]interface{})
+				gdrcopy, ok := values["gdrcopy"].(map[string]any)
 				if !ok {
 					t.Errorf("gdrcopy not found or not a map")
 				} else {
@@ -323,7 +323,7 @@ func TestGetValuesForComponent_InlineOverrides(t *testing.T) {
 
 			// Verify gds if specified
 			if tt.wantGDS {
-				gds, ok := values["gds"].(map[string]interface{})
+				gds, ok := values["gds"].(map[string]any)
 				if !ok {
 					t.Errorf("gds not found or not a map")
 				} else {
@@ -350,12 +350,12 @@ func TestGetValuesForComponent_OverridesMergeDeep(t *testing.T) {
 				Name:       "gpu-operator",
 				Version:    "v25.3.4",
 				ValuesFile: "components/gpu-operator/values.yaml",
-				Overrides: map[string]interface{}{
-					"driver": map[string]interface{}{
+				Overrides: map[string]any{
+					"driver": map[string]any{
 						// Only override version, other driver fields should remain
 						"version": "999.99.99",
 					},
-					"newField": map[string]interface{}{
+					"newField": map[string]any{
 						// Add entirely new field
 						"enabled": true,
 					},
@@ -370,7 +370,7 @@ func TestGetValuesForComponent_OverridesMergeDeep(t *testing.T) {
 	}
 
 	// Verify driver.version was overridden
-	driver, ok := values["driver"].(map[string]interface{})
+	driver, ok := values["driver"].(map[string]any)
 	if !ok {
 		t.Fatalf("driver not found or not a map")
 	}
@@ -389,7 +389,7 @@ func TestGetValuesForComponent_OverridesMergeDeep(t *testing.T) {
 	}
 
 	// Verify newField was added
-	newField, ok := values["newField"].(map[string]interface{})
+	newField, ok := values["newField"].(map[string]any)
 	if !ok {
 		t.Errorf("newField not found or not a map")
 	} else {

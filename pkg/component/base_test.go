@@ -156,7 +156,7 @@ func TestBaseBundler_RenderTemplate(t *testing.T) {
 	tests := []struct {
 		name    string
 		tmpl    string
-		data    interface{}
+		data    any
 		want    string
 		wantErr bool
 	}{
@@ -424,7 +424,7 @@ func TestBaseBundler_GenerateFileFromTemplate(t *testing.T) {
 		ctx          context.Context
 		templateName string
 		outputPath   string
-		data         interface{}
+		data         any
 		wantErr      bool
 		wantContent  string
 	}{
@@ -433,7 +433,7 @@ func TestBaseBundler_GenerateFileFromTemplate(t *testing.T) {
 			ctx:          context.Background(),
 			templateName: "test.yaml",
 			outputPath:   filepath.Join(tmpDir, "test1.yaml"),
-			data: map[string]interface{}{
+			data: map[string]any{
 				"Name":  "TestName",
 				"Value": "TestValue",
 			},
@@ -445,7 +445,7 @@ func TestBaseBundler_GenerateFileFromTemplate(t *testing.T) {
 			ctx:          context.Background(),
 			templateName: "missing.yaml",
 			outputPath:   filepath.Join(tmpDir, "test2.yaml"),
-			data:         map[string]interface{}{},
+			data:         map[string]any{},
 			wantErr:      true,
 		},
 		{
@@ -457,7 +457,7 @@ func TestBaseBundler_GenerateFileFromTemplate(t *testing.T) {
 			}(),
 			templateName: "test.yaml",
 			outputPath:   filepath.Join(tmpDir, "test3.yaml"),
-			data:         map[string]interface{}{},
+			data:         map[string]any{},
 			wantErr:      true,
 		},
 	}

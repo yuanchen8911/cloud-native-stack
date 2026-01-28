@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/NVIDIA/cloud-native-stack/pkg/errors"
 	"github.com/NVIDIA/cloud-native-stack/pkg/measurement"
 	"github.com/NVIDIA/cloud-native-stack/pkg/snapshotter"
 )
@@ -27,20 +28,23 @@ type ConstraintPath struct {
 // The key portion may contain dots (e.g., "/proc/sys/kernel/osrelease").
 func ParseConstraintPath(path string) (*ConstraintPath, error) {
 	if path == "" {
-		return nil, fmt.Errorf("constraint path cannot be empty")
+		return nil, errors.New(errors.ErrCodeInvalidRequest, "constraint path cannot be empty")
 	}
 
 	// Split by dots, but we need at least 3 parts
 	parts := strings.SplitN(path, ".", 3)
 	if len(parts) < 3 {
-		return nil, fmt.Errorf("invalid constraint path %q: expected format {Type}.{Subtype}.{Key}", path)
+		return nil, errors.NewWithContext(errors.ErrCodeInvalidRequest,
+			"invalid constraint path: expected format {Type}.{Subtype}.{Key}",
+			map[string]any{"path": path})
 	}
 
 	// Parse and validate the measurement type
 	measurementType, valid := measurement.ParseType(parts[0])
 	if !valid {
-		return nil, fmt.Errorf("invalid measurement type %q in constraint path %q: valid types are %v",
-			parts[0], path, measurement.Types)
+		return nil, errors.NewWithContext(errors.ErrCodeInvalidRequest,
+			"invalid measurement type in constraint path",
+			map[string]any{"type": parts[0], "path": path, "validTypes": measurement.Types})
 	}
 
 	return &ConstraintPath{
@@ -59,7 +63,7 @@ func (cp *ConstraintPath) String() string {
 // Returns the value as a string, or an error if the path doesn't exist.
 func (cp *ConstraintPath) ExtractValue(snap *snapshotter.Snapshot) (string, error) {
 	if snap == nil {
-		return "", fmt.Errorf("snapshot is nil")
+		return "", errors.New(errors.ErrCodeInvalidRequest, "snapshot is nil")
 	}
 
 	// Find the measurement with matching type
@@ -72,7 +76,9 @@ func (cp *ConstraintPath) ExtractValue(snap *snapshotter.Snapshot) (string, erro
 	}
 
 	if targetMeasurement == nil {
-		return "", fmt.Errorf("measurement type %q not found in snapshot", cp.Type)
+		return "", errors.NewWithContext(errors.ErrCodeNotFound,
+			"measurement type not found in snapshot",
+			map[string]any{"type": cp.Type})
 	}
 
 	// Find the subtype
@@ -85,13 +91,17 @@ func (cp *ConstraintPath) ExtractValue(snap *snapshotter.Snapshot) (string, erro
 	}
 
 	if targetSubtype == nil {
-		return "", fmt.Errorf("subtype %q not found in measurement type %q", cp.Subtype, cp.Type)
+		return "", errors.NewWithContext(errors.ErrCodeNotFound,
+			"subtype not found in measurement",
+			map[string]any{"subtype": cp.Subtype, "type": cp.Type})
 	}
 
 	// Find the key in data
 	reading, exists := targetSubtype.Data[cp.Key]
 	if !exists {
-		return "", fmt.Errorf("key %q not found in subtype %q of measurement type %q", cp.Key, cp.Subtype, cp.Type)
+		return "", errors.NewWithContext(errors.ErrCodeNotFound,
+			"key not found in subtype",
+			map[string]any{"key": cp.Key, "subtype": cp.Subtype, "type": cp.Type})
 	}
 
 	// Convert reading to string

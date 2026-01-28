@@ -124,9 +124,9 @@ Combined node selector and custom tolerations:
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			// Parse output format
-			outFormat := serializer.Format(cmd.String("format"))
-			if outFormat.IsUnknown() {
-				return fmt.Errorf("unknown output format: %q", outFormat)
+			outFormat, err := parseOutputFormat(cmd)
+			if err != nil {
+				return err
 			}
 
 			// Create factory

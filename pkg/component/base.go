@@ -104,7 +104,7 @@ func (b *BaseBundler) WriteFileString(path, content string, perm os.FileMode) er
 // RenderTemplate renders a template with the given data.
 // The template is parsed and executed with the provided data structure.
 // Returns the rendered content as a string.
-func (b *BaseBundler) RenderTemplate(tmplContent, name string, data interface{}) (string, error) {
+func (b *BaseBundler) RenderTemplate(tmplContent, name string, data any) (string, error) {
 	tmpl, err := template.New(name).Parse(tmplContent)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse template %s: %w", name, err)
@@ -120,7 +120,7 @@ func (b *BaseBundler) RenderTemplate(tmplContent, name string, data interface{})
 
 // RenderAndWriteTemplate renders a template and writes it to a file.
 // This combines RenderTemplate and WriteFile for convenience.
-func (b *BaseBundler) RenderAndWriteTemplate(tmplContent, name, outputPath string, data interface{}, perm os.FileMode) error {
+func (b *BaseBundler) RenderAndWriteTemplate(tmplContent, name, outputPath string, data any, perm os.FileMode) error {
 	content, err := b.RenderTemplate(tmplContent, name, data)
 	if err != nil {
 		return err
@@ -263,7 +263,7 @@ type TemplateFunc func(name string) (string, bool)
 //	err := b.GenerateFileFromTemplate(ctx, GetTemplate, "values.yaml",
 //	    filepath.Join(dir, "values.yaml"), data, 0644)
 func (b *BaseBundler) GenerateFileFromTemplate(ctx context.Context, getTemplate TemplateFunc,
-	templateName, outputPath string, data interface{}, perm os.FileMode) error {
+	templateName, outputPath string, data any, perm os.FileMode) error {
 
 	if err := b.CheckContext(ctx); err != nil {
 		return err

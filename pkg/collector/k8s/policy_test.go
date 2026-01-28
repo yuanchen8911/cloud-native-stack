@@ -19,17 +19,17 @@ import (
 // Helper to create a mock ClusterPolicy
 func createMockClusterPolicy(name, namespace string) *unstructured.Unstructured {
 	policy := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "nvidia.com/v1",
 			"kind":       "ClusterPolicy",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": name,
 			},
-			"spec": map[string]interface{}{
-				"operator": map[string]interface{}{
+			"spec": map[string]any{
+				"operator": map[string]any{
 					"defaultRuntime": "containerd",
 				},
-				"driver": map[string]interface{}{
+				"driver": map[string]any{
 					"enabled": true,
 					"version": "550.54.15",
 				},
@@ -176,7 +176,7 @@ func TestPolicyCollector_SpecSerialization(t *testing.T) {
 	assert.NotEmpty(t, specJSON)
 
 	// Deserialize and verify
-	var deserializedSpec map[string]interface{}
+	var deserializedSpec map[string]any
 	err = json.Unmarshal(specJSON, &deserializedSpec)
 	assert.NoError(t, err)
 	assert.NotNil(t, deserializedSpec)

@@ -12,11 +12,13 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/NVIDIA/cloud-native-stack/pkg/defaults"
 )
 
 // RespondJSON writes a JSON response with the given status code and data.
 // It buffers the JSON encoding before writing headers to prevent partial responses.
-func RespondJSON(w http.ResponseWriter, statusCode int, data interface{}) {
+func RespondJSON(w http.ResponseWriter, statusCode int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 
 	// Serialize first to detect errors before writing headers
@@ -39,12 +41,12 @@ const (
 )
 
 var (
-	HttpReaderDefaultTimeout               = 30 * time.Second
-	HttpReaderDefaultKeepAlive             = 30 * time.Second
-	HttpReaderDefaultConnectTimeout        = 5 * time.Second
-	HttpReaderDefaultTLSHandshakeTimeout   = 5 * time.Second
-	HttpReaderDefaultResponseHeaderTimeout = 10 * time.Second
-	HttpReaderDefaultIdleConnTimeout       = 90 * time.Second
+	HttpReaderDefaultTimeout               = defaults.HTTPClientTimeout
+	HttpReaderDefaultKeepAlive             = defaults.HTTPKeepAlive
+	HttpReaderDefaultConnectTimeout        = defaults.HTTPConnectTimeout
+	HttpReaderDefaultTLSHandshakeTimeout   = defaults.HTTPTLSHandshakeTimeout
+	HttpReaderDefaultResponseHeaderTimeout = defaults.HTTPResponseHeaderTimeout
+	HttpReaderDefaultIdleConnTimeout       = defaults.HTTPIdleConnTimeout
 	HttpReaderDefaultMaxIdleConns          = 100
 	HttpReaderDefaultMaxIdleConnsPerHost   = 10
 	HttpReaderDefaultMaxConnsPerHost       = 0

@@ -184,7 +184,7 @@ func (s Scalar[T]) MarshalJSON() ([]byte, error) {
 }
 
 // MarshalYAML makes the YAML value be the underlying scalar (not an object wrapper).
-func (s Scalar[T]) MarshalYAML() (interface{}, error) {
+func (s Scalar[T]) MarshalYAML() (any, error) {
 	return s.V, nil
 }
 

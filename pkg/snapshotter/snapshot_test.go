@@ -225,10 +225,10 @@ func TestParseTolerations(t *testing.T) {
 
 type mockSerializer struct {
 	serialized bool
-	data       interface{}
+	data       any
 }
 
-func (m *mockSerializer) Serialize(ctx context.Context, data interface{}) error {
+func (m *mockSerializer) Serialize(ctx context.Context, data any) error {
 	m.serialized = true
 	m.data = data
 	return nil

@@ -70,16 +70,16 @@ type ComponentConfig struct {
 	// MetadataExtensions provides additional fields for BundleMetadata.
 	// These are merged into the Extensions map of the generated metadata.
 	// Use this instead of MetadataFunc for simple extensions.
-	MetadataExtensions map[string]interface{}
+	MetadataExtensions map[string]any
 }
 
 // CustomManifestFunc is a function type for generating custom manifests.
 // It receives context, base bundler, values map, config map, and output directory.
 // Returns slice of generated file paths (may be nil/empty if no manifests needed).
-type CustomManifestFunc func(ctx context.Context, b *BaseBundler, values map[string]interface{}, configMap map[string]string, dir string) ([]string, error)
+type CustomManifestFunc func(ctx context.Context, b *BaseBundler, values map[string]any, configMap map[string]string, dir string) ([]string, error)
 
 // MetadataFunc is a function type for creating component-specific metadata.
-type MetadataFunc func(configMap map[string]string) interface{}
+type MetadataFunc func(configMap map[string]string) any
 
 // BundleMetadata contains common metadata used for README and manifest template rendering.
 // This is the default metadata structure used when MetadataFunc is not provided.
@@ -96,7 +96,7 @@ type BundleMetadata struct {
 
 	// Extensions holds component-specific fields.
 	// Templates can access these via {{ .Script.Extensions.FieldName }}
-	Extensions map[string]interface{}
+	Extensions map[string]any
 }
 
 // GenerateDefaultBundleMetadata creates default bundle metadata from config map.
@@ -109,7 +109,7 @@ func GenerateDefaultBundleMetadata(config map[string]string, name string, defaul
 		HelmReleaseName:  name,
 		Version:          GetBundlerVersion(config),
 		RecipeVersion:    GetRecipeBundlerVersion(config),
-		Extensions:       make(map[string]interface{}),
+		Extensions:       make(map[string]any),
 	}
 }
 
@@ -286,7 +286,7 @@ func MakeBundle(ctx context.Context, b *BaseBundler, input recipe.RecipeInput, o
 	}
 
 	// Generate metadata for templates
-	var metadata interface{}
+	var metadata any
 	if cfg.MetadataFunc != nil {
 		metadata = cfg.MetadataFunc(configMap)
 	} else {
@@ -294,7 +294,7 @@ func MakeBundle(ctx context.Context, b *BaseBundler, input recipe.RecipeInput, o
 	}
 
 	// Create combined data for README (values map + metadata)
-	readmeData := map[string]interface{}{
+	readmeData := map[string]any{
 		"Values": values,
 		"Script": metadata, // "Script" key preserved for template compatibility
 	}

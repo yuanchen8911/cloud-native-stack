@@ -789,7 +789,7 @@ func TestAllValuesFilesParseAsValidYAML(t *testing.T) {
 			}
 
 			// Parse as generic YAML to verify syntax
-			var parsed interface{}
+			var parsed any
 			if err := yaml.Unmarshal(content, &parsed); err != nil {
 				t.Errorf("failed to parse values file as YAML: %v", err)
 			}

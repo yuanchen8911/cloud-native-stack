@@ -29,12 +29,12 @@ func TestGenerate_Success(t *testing.T) {
 
 	input := &GeneratorInput{
 		RecipeResult: createTestRecipeResult(),
-		ComponentValues: map[string]map[string]interface{}{
+		ComponentValues: map[string]map[string]any{
 			"cert-manager": {
 				"installCRDs": true,
 			},
 			"gpu-operator": {
-				"driver": map[string]interface{}{
+				"driver": map[string]any{
 					"enabled": true,
 				},
 			},
@@ -120,7 +120,7 @@ func TestGenerate_ContextCancellation(t *testing.T) {
 
 	input := &GeneratorInput{
 		RecipeResult:    createEmptyRecipeResult(),
-		ComponentValues: map[string]map[string]interface{}{},
+		ComponentValues: map[string]map[string]any{},
 		Version:         "v1.0.0",
 	}
 
@@ -137,7 +137,7 @@ func TestGenerate_WithChecksums(t *testing.T) {
 
 	input := &GeneratorInput{
 		RecipeResult: createTestRecipeResult(),
-		ComponentValues: map[string]map[string]interface{}{
+		ComponentValues: map[string]map[string]any{
 			"cert-manager": {"installCRDs": true},
 			"gpu-operator": {"enabled": true},
 		},
@@ -291,12 +291,12 @@ func TestGenerate_Reproducible(t *testing.T) {
 
 	input := &GeneratorInput{
 		RecipeResult: createTestRecipeResult(),
-		ComponentValues: map[string]map[string]interface{}{
+		ComponentValues: map[string]map[string]any{
 			"cert-manager": {
 				"installCRDs": true,
 			},
 			"gpu-operator": {
-				"driver": map[string]interface{}{
+				"driver": map[string]any{
 					"enabled": true,
 				},
 			},
@@ -369,7 +369,7 @@ func TestGenerate_NoTimestampInOutput(t *testing.T) {
 
 	input := &GeneratorInput{
 		RecipeResult: createTestRecipeResult(),
-		ComponentValues: map[string]map[string]interface{}{
+		ComponentValues: map[string]map[string]any{
 			"cert-manager": {},
 			"gpu-operator": {},
 		},

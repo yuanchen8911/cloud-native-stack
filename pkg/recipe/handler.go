@@ -5,20 +5,16 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"time"
 
+	"github.com/NVIDIA/cloud-native-stack/pkg/defaults"
 	cnserrors "github.com/NVIDIA/cloud-native-stack/pkg/errors"
 	"github.com/NVIDIA/cloud-native-stack/pkg/serializer"
 	"github.com/NVIDIA/cloud-native-stack/pkg/server"
 )
 
-const (
-	// DefaultRecipeCacheTTL is the default cache duration for recipe responses.
-	// 10 minutes balances freshness with reduced load on recipe store.
-	// Recipe metadata rarely changes; longer TTL would be safe but reduces
-	// visibility of updates during development.
-	DefaultRecipeCacheTTL = 10 * time.Minute
-)
+// DefaultRecipeCacheTTL is the default cache duration for recipe responses.
+// Exported for backwards compatibility; prefer using defaults.RecipeCacheTTL.
+const DefaultRecipeCacheTTL = defaults.RecipeCacheTTL
 
 var (
 	// recipeCacheTTL can be overridden for testing or custom configurations
@@ -33,20 +29,20 @@ func (b *Builder) HandleRecipes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
 		server.WriteError(w, r, http.StatusMethodNotAllowed, cnserrors.ErrCodeMethodNotAllowed,
-			"Method not allowed", false, map[string]interface{}{
+			"Method not allowed", false, map[string]any{
 				"method": r.Method,
 			})
 		return
 	}
 
 	// Add request-scoped timeout
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), defaults.RecipeHandlerTimeout)
 	defer cancel()
 
 	criteria, err := ParseCriteriaFromRequest(r)
 	if err != nil {
 		server.WriteError(w, r, http.StatusBadRequest, cnserrors.ErrCodeInvalidRequest,
-			"Invalid recipe criteria", false, map[string]interface{}{
+			"Invalid recipe criteria", false, map[string]any{
 				"error": err.Error(),
 			})
 		return

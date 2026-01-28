@@ -59,7 +59,7 @@ type GeneratorInput struct {
 
 	// ComponentValues maps component names to their values.
 	// These are collected from individual bundlers.
-	ComponentValues map[string]map[string]interface{}
+	ComponentValues map[string]map[string]any
 
 	// Version is the chart version (from CLI/bundler version).
 	Version string
@@ -264,12 +264,12 @@ func (g *Generator) generateChartYAML(ctx context.Context, input *GeneratorInput
 	// Render template
 	tmpl, err := template.New("Chart.yaml").Parse(chartTemplate)
 	if err != nil {
-		return "", 0, fmt.Errorf("failed to parse Chart.yaml template: %w", err)
+		return "", 0, errors.Wrap(errors.ErrCodeInternal, "failed to parse Chart.yaml template", err)
 	}
 
 	var buf strings.Builder
 	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", 0, fmt.Errorf("failed to render Chart.yaml: %w", err)
+		return "", 0, errors.Wrap(errors.ErrCodeInternal, "failed to render Chart.yaml", err)
 	}
 
 	// Write file
@@ -277,7 +277,7 @@ func (g *Generator) generateChartYAML(ctx context.Context, input *GeneratorInput
 	content := buf.String()
 
 	if err := os.WriteFile(chartPath, []byte(content), 0600); err != nil {
-		return "", 0, fmt.Errorf("failed to write Chart.yaml: %w", err)
+		return "", 0, errors.Wrap(errors.ErrCodeInternal, "failed to write Chart.yaml", err)
 	}
 
 	return chartPath, int64(len(content)), nil
@@ -291,13 +291,13 @@ func (g *Generator) generateValuesYAML(ctx context.Context, input *GeneratorInpu
 
 	// Build combined values map
 	// Structure: component-name -> values
-	values := make(map[string]interface{})
+	values := make(map[string]any)
 
 	// Add components in deployment order for consistent output
 	for _, name := range input.RecipeResult.DeploymentOrder {
 		if componentValues, ok := input.ComponentValues[name]; ok {
 			// Add enabled flag (default true)
-			componentWithEnabled := make(map[string]interface{})
+			componentWithEnabled := make(map[string]any)
 			componentWithEnabled["enabled"] = true
 			for k, v := range componentValues {
 				componentWithEnabled[k] = v
@@ -309,7 +309,7 @@ func (g *Generator) generateValuesYAML(ctx context.Context, input *GeneratorInpu
 	// Add any components not in deployment order
 	for name, componentValues := range input.ComponentValues {
 		if _, exists := values[name]; !exists {
-			componentWithEnabled := make(map[string]interface{})
+			componentWithEnabled := make(map[string]any)
 			componentWithEnabled["enabled"] = true
 			for k, v := range componentValues {
 				componentWithEnabled[k] = v
@@ -330,7 +330,7 @@ func (g *Generator) generateValuesYAML(ctx context.Context, input *GeneratorInpu
 
 	yamlBytes, err := yaml.Marshal(values)
 	if err != nil {
-		return "", 0, fmt.Errorf("failed to marshal values: %w", err)
+		return "", 0, errors.Wrap(errors.ErrCodeInternal, "failed to marshal values", err)
 	}
 
 	content := header + string(yamlBytes)
@@ -338,7 +338,7 @@ func (g *Generator) generateValuesYAML(ctx context.Context, input *GeneratorInpu
 	// Write file
 	valuesPath := filepath.Join(outputDir, "values.yaml")
 	if err := os.WriteFile(valuesPath, []byte(content), 0600); err != nil {
-		return "", 0, fmt.Errorf("failed to write values.yaml: %w", err)
+		return "", 0, errors.Wrap(errors.ErrCodeInternal, "failed to write values.yaml", err)
 	}
 
 	return valuesPath, int64(len(content)), nil
@@ -413,12 +413,12 @@ func (g *Generator) generateREADME(ctx context.Context, input *GeneratorInput, o
 	// Render template
 	tmpl, err := template.New("README.md").Parse(readmeTemplate)
 	if err != nil {
-		return "", 0, fmt.Errorf("failed to parse README.md template: %w", err)
+		return "", 0, errors.Wrap(errors.ErrCodeInternal, "failed to parse README.md template", err)
 	}
 
 	var buf strings.Builder
 	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", 0, fmt.Errorf("failed to render README.md: %w", err)
+		return "", 0, errors.Wrap(errors.ErrCodeInternal, "failed to render README.md", err)
 	}
 
 	// Write file
@@ -426,7 +426,7 @@ func (g *Generator) generateREADME(ctx context.Context, input *GeneratorInput, o
 	content := buf.String()
 
 	if err := os.WriteFile(readmePath, []byte(content), 0600); err != nil {
-		return "", 0, fmt.Errorf("failed to write README.md: %w", err)
+		return "", 0, errors.Wrap(errors.ErrCodeInternal, "failed to write README.md", err)
 	}
 
 	return readmePath, int64(len(content)), nil
@@ -483,7 +483,7 @@ func (g *Generator) generateTemplates(ctx context.Context, input *GeneratorInput
 
 	templatesDir := filepath.Join(outputDir, "templates")
 	if err := os.MkdirAll(templatesDir, 0755); err != nil {
-		return nil, 0, fmt.Errorf("failed to create templates directory: %w", err)
+		return nil, 0, errors.Wrap(errors.ErrCodeInternal, "failed to create templates directory", err)
 	}
 
 	files := make([]string, 0, len(input.ManifestContents))
@@ -494,7 +494,8 @@ func (g *Generator) generateTemplates(ctx context.Context, input *GeneratorInput
 		outputPath := filepath.Join(templatesDir, filename)
 
 		if err := os.WriteFile(outputPath, content, 0600); err != nil {
-			return nil, 0, fmt.Errorf("failed to write template %s: %w", filename, err)
+			return nil, 0, errors.WrapWithContext(errors.ErrCodeInternal, "failed to write template", err,
+				map[string]any{"filename": filename})
 		}
 
 		files = append(files, outputPath)

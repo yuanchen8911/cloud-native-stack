@@ -198,7 +198,7 @@ func (s *Server) configureRootHandler() {
 			if r.Method != http.MethodGet {
 				w.Header().Set("Allow", http.MethodGet)
 				WriteError(w, r, http.StatusMethodNotAllowed, cnserrors.ErrCodeMethodNotAllowed,
-					"Method not allowed", false, map[string]interface{}{
+					"Method not allowed", false, map[string]any{
 						"method": r.Method,
 					})
 				return
@@ -213,7 +213,7 @@ func (s *Server) configureRootHandler() {
 				}
 			}
 
-			response := map[string]interface{}{
+			response := map[string]any{
 				"service": s.config.Name,
 				"version": s.config.Version,
 				"routes":  routes,

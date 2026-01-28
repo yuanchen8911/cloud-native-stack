@@ -276,7 +276,7 @@ func (v Version) IsValid() bool {
 }
 
 // ToString converts a version pointer to string.
-func ToString(v interface{}) string {
+func ToString(v any) string {
 	if v == nil {
 		return ""
 	}

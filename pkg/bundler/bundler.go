@@ -156,7 +156,7 @@ func (b *DefaultBundler) Make(ctx context.Context, input recipe.RecipeInput, dir
 }
 
 // makeUmbrellaChart generates a Helm umbrella chart.
-func (b *DefaultBundler) makeUmbrellaChart(ctx context.Context, recipeResult *recipe.RecipeResult, componentValues map[string]map[string]interface{}, dir string, start time.Time) (*result.Output, error) {
+func (b *DefaultBundler) makeUmbrellaChart(ctx context.Context, recipeResult *recipe.RecipeResult, componentValues map[string]map[string]any, dir string, start time.Time) (*result.Output, error) {
 	slog.Debug("generating umbrella chart",
 		"component_count", len(recipeResult.ComponentRefs),
 		"output_dir", dir,
@@ -228,7 +228,7 @@ func (b *DefaultBundler) makeUmbrellaChart(ctx context.Context, recipeResult *re
 }
 
 // makeArgoCD generates ArgoCD Application manifests.
-func (b *DefaultBundler) makeArgoCD(ctx context.Context, recipeResult *recipe.RecipeResult, componentValues map[string]map[string]interface{}, dir string, start time.Time) (*result.Output, error) {
+func (b *DefaultBundler) makeArgoCD(ctx context.Context, recipeResult *recipe.RecipeResult, componentValues map[string]map[string]any, dir string, start time.Time) (*result.Output, error) {
 	slog.Debug("generating argocd applications",
 		"component_count", len(recipeResult.ComponentRefs),
 		"output_dir", dir,
@@ -288,8 +288,8 @@ func (b *DefaultBundler) makeArgoCD(ctx context.Context, recipeResult *recipe.Re
 
 // extractComponentValues extracts and processes values for each component in the recipe.
 // It loads base values from the recipe, applies user overrides, and applies node selectors.
-func (b *DefaultBundler) extractComponentValues(ctx context.Context, recipeResult *recipe.RecipeResult) (map[string]map[string]interface{}, error) {
-	componentValues := make(map[string]map[string]interface{})
+func (b *DefaultBundler) extractComponentValues(ctx context.Context, recipeResult *recipe.RecipeResult) (map[string]map[string]any, error) {
+	componentValues := make(map[string]map[string]any)
 
 	for _, ref := range recipeResult.ComponentRefs {
 		if err := ctx.Err(); err != nil {
@@ -303,7 +303,7 @@ func (b *DefaultBundler) extractComponentValues(ctx context.Context, recipeResul
 				"component", ref.Name,
 				"error", err,
 			)
-			values = make(map[string]interface{})
+			values = make(map[string]any)
 		}
 
 		// Apply user value overrides from --set flags
@@ -373,7 +373,7 @@ func (b *DefaultBundler) getValueOverridesForComponent(componentName string) map
 
 // applyNodeSchedulingOverrides applies node selectors and tolerations to component values.
 // Uses the component registry to determine the correct paths for each component.
-func (b *DefaultBundler) applyNodeSchedulingOverrides(componentName string, values map[string]interface{}) {
+func (b *DefaultBundler) applyNodeSchedulingOverrides(componentName string, values map[string]any) {
 	if b.Config == nil {
 		return
 	}

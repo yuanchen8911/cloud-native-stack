@@ -47,6 +47,7 @@ cnsctl bundle \
   --output ./bundle \
   --data ./examples/data \
   --deployer argocd \
+  --output oci://ghcr.io/mchmarny/cns-bundle \
   --system-node-selector nodeGroup=system-pool \
   --accelerated-node-selector nodeGroup=customer-gpu \
   --accelerated-node-toleration nvidia.com/gpu=present:NoSchedule

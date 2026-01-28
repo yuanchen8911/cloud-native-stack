@@ -33,7 +33,7 @@ type StructuredError struct {
 	Code    ErrorCode
 	Message string
 	Cause   error
-	Context map[string]interface{}
+	Context map[string]any
 }
 
 // Error implements the error interface.
@@ -57,6 +57,15 @@ func New(code ErrorCode, message string) *StructuredError {
 	}
 }
 
+// NewWithContext creates a new StructuredError with context information.
+func NewWithContext(code ErrorCode, message string, context map[string]any) *StructuredError {
+	return &StructuredError{
+		Code:    code,
+		Message: message,
+		Context: context,
+	}
+}
+
 // Wrap wraps an existing error with additional context.
 func Wrap(code ErrorCode, message string, cause error) *StructuredError {
 	return &StructuredError{
@@ -67,7 +76,7 @@ func Wrap(code ErrorCode, message string, cause error) *StructuredError {
 }
 
 // WrapWithContext wraps an error with additional context information.
-func WrapWithContext(code ErrorCode, message string, cause error, context map[string]interface{}) *StructuredError {
+func WrapWithContext(code ErrorCode, message string, cause error, context map[string]any) *StructuredError {
 	return &StructuredError{
 		Code:    code,
 		Message: message,

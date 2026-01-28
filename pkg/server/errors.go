@@ -12,17 +12,17 @@ import (
 
 // ErrorResponse represents error responses as per OpenAPI spec
 type ErrorResponse struct {
-	Code      string                 `json:"code" yaml:"code"`
-	Message   string                 `json:"message" yaml:"message"`
-	Details   map[string]interface{} `json:"details,omitempty" yaml:"details,omitempty"`
-	RequestID string                 `json:"requestId" yaml:"requestId"`
-	Timestamp time.Time              `json:"timestamp" yaml:"timestamp"`
-	Retryable bool                   `json:"retryable" yaml:"retryable"`
+	Code      string         `json:"code" yaml:"code"`
+	Message   string         `json:"message" yaml:"message"`
+	Details   map[string]any `json:"details,omitempty" yaml:"details,omitempty"`
+	RequestID string         `json:"requestId" yaml:"requestId"`
+	Timestamp time.Time      `json:"timestamp" yaml:"timestamp"`
+	Retryable bool           `json:"retryable" yaml:"retryable"`
 }
 
 // writeError writes error response
 func WriteError(w http.ResponseWriter, r *http.Request, statusCode int,
-	code cnserrors.ErrorCode, message string, retryable bool, details map[string]interface{}) {
+	code cnserrors.ErrorCode, message string, retryable bool, details map[string]any) {
 
 	requestID, _ := r.Context().Value(contextKeyRequestID).(string)
 	if requestID == "" {
@@ -85,11 +85,11 @@ func retryableFromCode(code cnserrors.ErrorCode) bool {
 	return false
 }
 
-func mergeDetails(a, b map[string]interface{}) map[string]interface{} {
+func mergeDetails(a, b map[string]any) map[string]any {
 	if len(a) == 0 && len(b) == 0 {
 		return nil
 	}
-	out := make(map[string]interface{}, len(a)+len(b))
+	out := make(map[string]any, len(a)+len(b))
 	for k, v := range a {
 		out[k] = v
 	}
@@ -101,7 +101,7 @@ func mergeDetails(a, b map[string]interface{}) map[string]interface{} {
 
 // WriteErrorFromErr writes an ErrorResponse based on a canonical structured error.
 // If err is not a *errors.StructuredError, it falls back to INTERNAL.
-func WriteErrorFromErr(w http.ResponseWriter, r *http.Request, err error, fallbackMessage string, extraDetails map[string]interface{}) {
+func WriteErrorFromErr(w http.ResponseWriter, r *http.Request, err error, fallbackMessage string, extraDetails map[string]any) {
 	if err == nil {
 		WriteError(w, r, http.StatusInternalServerError, cnserrors.ErrCodeInternal,
 			fallbackMessage, true, extraDetails)
@@ -117,7 +117,7 @@ func WriteErrorFromErr(w http.ResponseWriter, r *http.Request, err error, fallba
 
 		details := mergeDetails(se.Context, extraDetails)
 		if se.Cause != nil {
-			details = mergeDetails(details, map[string]interface{}{"error": se.Cause.Error()})
+			details = mergeDetails(details, map[string]any{"error": se.Cause.Error()})
 		}
 
 		WriteError(w, r, HTTPStatusFromCode(se.Code), se.Code, msg, retryableFromCode(se.Code), details)
@@ -125,5 +125,5 @@ func WriteErrorFromErr(w http.ResponseWriter, r *http.Request, err error, fallba
 	}
 
 	WriteError(w, r, http.StatusInternalServerError, cnserrors.ErrCodeInternal,
-		fallbackMessage, true, mergeDetails(extraDetails, map[string]interface{}{"error": err.Error()}))
+		fallbackMessage, true, mergeDetails(extraDetails, map[string]any{"error": err.Error()}))
 }

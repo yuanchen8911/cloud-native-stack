@@ -8,6 +8,7 @@ package validator
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"testing"
 
@@ -377,6 +378,49 @@ func TestPrintDetectedCriteria(t *testing.T) {
 				t.Errorf("expected log to contain value %q, got %q", tt.value, output)
 			}
 		})
+	}
+}
+
+// TestValidator_Validate_ContextCancellation tests that validation respects context cancellation.
+func TestValidator_Validate_ContextCancellation(t *testing.T) {
+	snapshot := &snapshotter.Snapshot{
+		Measurements: []*measurement.Measurement{
+			{
+				Type: measurement.TypeK8s,
+				Subtypes: []measurement.Subtype{
+					{
+						Name: "server",
+						Data: map[string]measurement.Reading{
+							"version": measurement.Str("v1.33.5-eks-3025e55"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Create many constraints to ensure the loop runs multiple times
+	constraints := make([]recipe.Constraint, 100)
+	for i := range constraints {
+		constraints[i] = recipe.Constraint{Name: "K8s.server.version", Value: ">= 1.32.4"}
+	}
+
+	recipeResult := &recipe.RecipeResult{
+		Constraints: constraints,
+	}
+
+	// Create an already canceled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	v := New(WithVersion("test"))
+	_, err := v.Validate(ctx, recipeResult, snapshot)
+
+	if err == nil {
+		t.Error("expected error from canceled context, got nil")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled error, got %v", err)
 	}
 }
 

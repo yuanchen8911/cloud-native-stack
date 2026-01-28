@@ -68,14 +68,14 @@ func TestMergeDetails(t *testing.T) {
 		if got := mergeDetails(nil, nil); got != nil {
 			t.Fatalf("expected nil, got %#v", got)
 		}
-		if got := mergeDetails(map[string]interface{}{}, map[string]interface{}{}); got != nil {
+		if got := mergeDetails(map[string]any{}, map[string]any{}); got != nil {
 			t.Fatalf("expected nil, got %#v", got)
 		}
 	})
 
 	t.Run("merges and second overwrites", func(t *testing.T) {
-		a := map[string]interface{}{"a": 1, "shared": "old"}
-		b := map[string]interface{}{"b": 2, "shared": "new"}
+		a := map[string]any{"a": 1, "shared": "old"}
+		b := map[string]any{"b": 2, "shared": "new"}
 
 		got := mergeDetails(a, b)
 		if got == nil {
@@ -98,7 +98,7 @@ func TestWriteError_WritesErrorResponse(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), contextKeyRequestID, "req-123"))
 	w := httptest.NewRecorder()
 
-	WriteError(w, req, http.StatusBadRequest, cnserrors.ErrCodeInvalidRequest, "bad request", false, map[string]interface{}{"k": "v"})
+	WriteError(w, req, http.StatusBadRequest, cnserrors.ErrCodeInvalidRequest, "bad request", false, map[string]any{"k": "v"})
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, w.Code)
@@ -131,9 +131,9 @@ func TestWriteErrorFromErr_StructuredErrorMapsStatusAndDetails(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	cause := errors.New("db is down")
-	err := cnserrors.WrapWithContext(cnserrors.ErrCodeUnavailable, "service unavailable", cause, map[string]interface{}{"component": "db"})
+	err := cnserrors.WrapWithContext(cnserrors.ErrCodeUnavailable, "service unavailable", cause, map[string]any{"component": "db"})
 
-	WriteErrorFromErr(w, req, err, "fallback", map[string]interface{}{"extra": "yes"})
+	WriteErrorFromErr(w, req, err, "fallback", map[string]any{"extra": "yes"})
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, w.Code)
@@ -171,7 +171,7 @@ func TestWriteErrorFromErr_NonStructuredFallsBackToInternal(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
 
-	WriteErrorFromErr(w, req, errors.New("boom"), "fallback", map[string]interface{}{"x": "y"})
+	WriteErrorFromErr(w, req, errors.New("boom"), "fallback", map[string]any{"x": "y"})
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, w.Code)
