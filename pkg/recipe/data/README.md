@@ -15,6 +15,7 @@ This directory contains recipe metadata and component configurations for the NVI
 
 ```
 pkg/recipe/data/
+├── registry.yaml                  # Component registry (Helm & Kustomize configs)
 ├── base.yaml                      # Base recipe (universal defaults)
 ├── overlays/                      # Environment-specific overlays
 │   ├── eks.yaml                   # EKS overlay

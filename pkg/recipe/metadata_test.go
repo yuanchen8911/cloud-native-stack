@@ -594,3 +594,271 @@ func TestInheritanceChainDoesNotDuplicateRecipes(t *testing.T) {
 
 	t.Logf("No duplicate recipes in chain: %v", result.Metadata.AppliedOverlays)
 }
+
+// TestComponentRefApplyRegistryDefaults verifies that ComponentRef.ApplyRegistryDefaults
+// correctly applies defaults from ComponentConfig for both Helm and Kustomize components.
+func TestComponentRefApplyRegistryDefaults(t *testing.T) {
+	const (
+		testHelmRepo       = "https://charts.example.com"
+		testHelmRepoCustom = "https://custom.charts.com"
+		testVersion1       = "v1.0.0"
+		testVersion2       = "v2.0.0"
+	)
+
+	t.Run("helm defaults applied", func(t *testing.T) {
+		config := &ComponentConfig{
+			Name:        "test-helm",
+			DisplayName: "Test Helm",
+			Helm: HelmConfig{
+				DefaultRepository: testHelmRepo,
+				DefaultChart:      "example/chart",
+				DefaultVersion:    testVersion1,
+			},
+		}
+
+		ref := &ComponentRef{
+			Name: "test-helm",
+			// Type, Source, Version are empty - should be filled from defaults
+		}
+
+		ref.ApplyRegistryDefaults(config)
+
+		if ref.Type != ComponentTypeHelm {
+			t.Errorf("Type = %v, want %v", ref.Type, ComponentTypeHelm)
+		}
+		if ref.Source != testHelmRepo {
+			t.Errorf("Source = %q, want %q", ref.Source, testHelmRepo)
+		}
+		if ref.Version != testVersion1 {
+			t.Errorf("Version = %q, want %q", ref.Version, testVersion1)
+		}
+	})
+
+	t.Run("helm defaults not overwritten", func(t *testing.T) {
+		config := &ComponentConfig{
+			Name:        "test-helm",
+			DisplayName: "Test Helm",
+			Helm: HelmConfig{
+				DefaultRepository: testHelmRepo,
+				DefaultChart:      "example/chart",
+				DefaultVersion:    testVersion1,
+			},
+		}
+
+		ref := &ComponentRef{
+			Name:    "test-helm",
+			Type:    ComponentTypeHelm,
+			Source:  testHelmRepoCustom,
+			Version: testVersion2,
+		}
+
+		ref.ApplyRegistryDefaults(config)
+
+		// Should keep existing values
+		if ref.Source != testHelmRepoCustom {
+			t.Errorf("Source = %q, want %q (should not be overwritten)", ref.Source, testHelmRepoCustom)
+		}
+		if ref.Version != testVersion2 {
+			t.Errorf("Version = %q, want %q (should not be overwritten)", ref.Version, testVersion2)
+		}
+	})
+
+	t.Run("kustomize defaults applied", func(t *testing.T) {
+		const (
+			kustomizeSource = "https://github.com/example/repo"
+			kustomizePath   = "deploy/production"
+			kustomizeTag    = "v1.0.0"
+		)
+
+		config := &ComponentConfig{
+			Name:        "test-kustomize",
+			DisplayName: "Test Kustomize",
+			Kustomize: KustomizeConfig{
+				DefaultSource: kustomizeSource,
+				DefaultPath:   kustomizePath,
+				DefaultTag:    kustomizeTag,
+			},
+		}
+
+		ref := &ComponentRef{
+			Name: "test-kustomize",
+			// Type, Source, Tag, Path are empty - should be filled from defaults
+		}
+
+		ref.ApplyRegistryDefaults(config)
+
+		if ref.Type != ComponentTypeKustomize {
+			t.Errorf("Type = %v, want %v", ref.Type, ComponentTypeKustomize)
+		}
+		if ref.Source != kustomizeSource {
+			t.Errorf("Source = %q, want %q", ref.Source, kustomizeSource)
+		}
+		if ref.Tag != kustomizeTag {
+			t.Errorf("Tag = %q, want %q", ref.Tag, kustomizeTag)
+		}
+		if ref.Path != kustomizePath {
+			t.Errorf("Path = %q, want %q", ref.Path, kustomizePath)
+		}
+	})
+
+	t.Run("kustomize defaults not overwritten", func(t *testing.T) {
+		const (
+			kustomizeSource       = "https://github.com/example/repo"
+			kustomizePath         = "deploy/production"
+			kustomizeTag          = "v1.0.0"
+			kustomizeSourceCustom = "https://github.com/custom/repo"
+			kustomizePathCustom   = "deploy/staging"
+			kustomizeTagCustom    = "v2.0.0"
+		)
+
+		config := &ComponentConfig{
+			Name:        "test-kustomize",
+			DisplayName: "Test Kustomize",
+			Kustomize: KustomizeConfig{
+				DefaultSource: kustomizeSource,
+				DefaultPath:   kustomizePath,
+				DefaultTag:    kustomizeTag,
+			},
+		}
+
+		ref := &ComponentRef{
+			Name:   "test-kustomize",
+			Type:   ComponentTypeKustomize,
+			Source: kustomizeSourceCustom,
+			Tag:    kustomizeTagCustom,
+			Path:   kustomizePathCustom,
+		}
+
+		ref.ApplyRegistryDefaults(config)
+
+		// Should keep existing values
+		if ref.Source != kustomizeSourceCustom {
+			t.Errorf("Source = %q, want %q (should not be overwritten)", ref.Source, kustomizeSourceCustom)
+		}
+		if ref.Tag != kustomizeTagCustom {
+			t.Errorf("Tag = %q, want %q (should not be overwritten)", ref.Tag, kustomizeTagCustom)
+		}
+		if ref.Path != kustomizePathCustom {
+			t.Errorf("Path = %q, want %q (should not be overwritten)", ref.Path, kustomizePathCustom)
+		}
+	})
+
+	t.Run("nil config is safe", func(t *testing.T) {
+		ref := &ComponentRef{
+			Name: "test",
+		}
+
+		// Should not panic
+		ref.ApplyRegistryDefaults(nil)
+
+		// Values should be unchanged
+		if ref.Type != "" {
+			t.Errorf("Type = %q, want empty", ref.Type)
+		}
+	})
+
+	t.Run("explicit type preserved", func(t *testing.T) {
+		// Test that if a ComponentRef already has a type set, it's not changed
+		config := &ComponentConfig{
+			Name:        "test-helm",
+			DisplayName: "Test Helm",
+			Helm: HelmConfig{
+				DefaultRepository: "https://charts.example.com",
+			},
+		}
+
+		ref := &ComponentRef{
+			Name: "test-helm",
+			Type: ComponentTypeKustomize, // Explicit type set
+		}
+
+		ref.ApplyRegistryDefaults(config)
+
+		// Type should not be changed
+		if ref.Type != ComponentTypeKustomize {
+			t.Errorf("Type = %v, want %v (should preserve explicit type)", ref.Type, ComponentTypeKustomize)
+		}
+		// Since type is Kustomize, Helm defaults should NOT be applied
+		if ref.Source != "" {
+			t.Errorf("Source = %q, want empty (helm defaults should not apply to kustomize type)", ref.Source)
+		}
+	})
+}
+
+// TestComponentRefMergeWithPath verifies that the Path field is correctly merged
+// when merging ComponentRefs (overlay into base).
+func TestComponentRefMergeWithPath(t *testing.T) {
+	t.Run("path inherited from base", func(t *testing.T) {
+		base := RecipeMetadataSpec{
+			ComponentRefs: []ComponentRef{
+				{
+					Name:   "my-kustomize-app",
+					Type:   ComponentTypeKustomize,
+					Source: "https://github.com/example/repo",
+					Path:   "deploy/production",
+					Tag:    "v1.0.0",
+				},
+			},
+		}
+
+		// Overlay only specifies name and new tag
+		overlay := RecipeMetadataSpec{
+			ComponentRefs: []ComponentRef{
+				{
+					Name: "my-kustomize-app",
+					Tag:  "v2.0.0",
+				},
+			},
+		}
+
+		base.Merge(&overlay)
+
+		if len(base.ComponentRefs) != 1 {
+			t.Fatalf("expected 1 component, got %d", len(base.ComponentRefs))
+		}
+
+		comp := base.ComponentRefs[0]
+
+		// Path should be inherited from base
+		if comp.Path != "deploy/production" {
+			t.Errorf("Path = %q, want %q (should be inherited from base)", comp.Path, "deploy/production")
+		}
+		// Tag should be overridden by overlay
+		if comp.Tag != "v2.0.0" {
+			t.Errorf("Tag = %q, want %q (should be from overlay)", comp.Tag, "v2.0.0")
+		}
+	})
+
+	t.Run("path overridden by overlay", func(t *testing.T) {
+		base := RecipeMetadataSpec{
+			ComponentRefs: []ComponentRef{
+				{
+					Name:   "my-kustomize-app",
+					Type:   ComponentTypeKustomize,
+					Source: "https://github.com/example/repo",
+					Path:   "deploy/production",
+					Tag:    "v1.0.0",
+				},
+			},
+		}
+
+		// Overlay specifies a new path
+		overlay := RecipeMetadataSpec{
+			ComponentRefs: []ComponentRef{
+				{
+					Name: "my-kustomize-app",
+					Path: "deploy/staging",
+				},
+			},
+		}
+
+		base.Merge(&overlay)
+
+		comp := base.ComponentRefs[0]
+
+		// Path should be overridden by overlay
+		if comp.Path != "deploy/staging" {
+			t.Errorf("Path = %q, want %q (should be from overlay)", comp.Path, "deploy/staging")
+		}
+	})
+}

@@ -165,13 +165,14 @@ slog.Error("operation failed", "error", err, "component", "gpu-collector")
 
 | Task | Location | Key Points |
 |------|----------|------------|
-| New component | `pkg/recipe/data/registry.yaml` | Add entry with name, displayName, helm settings, nodeScheduling |
+| New Helm component | `pkg/recipe/data/registry.yaml` | Add entry with name, displayName, helm settings, nodeScheduling |
+| New Kustomize component | `pkg/recipe/data/registry.yaml` | Add entry with name, displayName, kustomize settings |
 | Component values | `pkg/recipe/data/components/<name>/` | Create values.yaml with Helm chart configuration |
 | New collector | `pkg/collector/<type>/` | Implement `Collector` interface, add to factory |
 | New API endpoint | `pkg/api/` | Handler + middleware chain + OpenAPI spec update |
 | Fix test failures | Run `make test` | Check race conditions (`-race`), verify context handling |
 
-**Adding a new component (declarative - no Go code needed):**
+**Adding a Helm component (declarative - no Go code needed):**
 ```yaml
 # pkg/recipe/data/registry.yaml
 - name: my-operator
@@ -184,6 +185,20 @@ slog.Error("operation failed", "error", err, "component", "gpu-collector")
     system:
       nodeSelectorPaths: [operator.nodeSelector]
 ```
+
+**Adding a Kustomize component (declarative - no Go code needed):**
+```yaml
+# pkg/recipe/data/registry.yaml
+- name: my-kustomize-app
+  displayName: My Kustomize App
+  valueOverrideKeys: [mykustomize]
+  kustomize:
+    defaultSource: https://github.com/example/my-app
+    defaultPath: deploy/production
+    defaultTag: v1.0.0
+```
+
+**Note:** A component must have either `helm` OR `kustomize` configuration, not both.
 
 ## Commands
 
@@ -232,7 +247,7 @@ When choosing between approaches, prioritize in this order:
 
 | File | Purpose |
 |------|---------|
-| `pkg/recipe/data/registry.yaml` | Declarative component configuration |
+| `pkg/recipe/data/registry.yaml` | Declarative component configuration (Helm & Kustomize) |
 | `pkg/recipe/data/overlays/*.yaml` | Recipe overlay definitions |
 | `pkg/recipe/data/components/*/values.yaml` | Component Helm values |
 | `api/cns/v1/server.yaml` | OpenAPI spec |

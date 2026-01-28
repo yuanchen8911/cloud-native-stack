@@ -188,9 +188,46 @@ When resolving a leaf recipe, the system merges in order from root to leaf:
 - **ComponentRefs**: Same-named components merge field-by-field; new ones are added
 - **Criteria**: Not inherited (each recipe defines its own)
 
+## Component Types
+
+The recipe system supports two deployment types for components:
+
+### Helm Components
+
+Helm components use Helm charts for deployment. They are configured via the `helm` section in the component registry and support values files and inline overrides.
+
+```yaml
+componentRefs:
+  - name: gpu-operator
+    type: Helm
+    source: https://helm.ngc.nvidia.com/nvidia
+    version: v25.3.3
+    valuesFile: components/gpu-operator/values.yaml
+    overrides:
+      driver:
+        version: 580.82.07
+```
+
+### Kustomize Components
+
+Kustomize components use Kustomize for deployment. They are configured via the `kustomize` section in the component registry and support Git/OCI sources with path and tag specifications.
+
+```yaml
+componentRefs:
+  - name: my-kustomize-app
+    type: Kustomize
+    source: https://github.com/example/my-app
+    tag: v1.0.0
+    path: deploy/production
+    patches:
+      - patches/custom-patch.yaml
+```
+
+**Note:** A component in the registry must have either `helm` OR `kustomize` configuration, not both. The component type is automatically determined based on which configuration is present.
+
 ## Component Value Configuration
 
-The bundler supports three patterns for configuring component values:
+The bundler supports three patterns for configuring Helm component values:
 
 ### Pattern 1: ValuesFile Only (Basic)
 

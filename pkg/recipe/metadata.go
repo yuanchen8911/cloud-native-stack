@@ -58,6 +58,44 @@ type ComponentRef struct {
 	// Paths are relative to the data directory.
 	// Example: ["components/gpu-operator/manifests/dcgm-exporter.yaml"]
 	ManifestFiles []string `json:"manifestFiles,omitempty" yaml:"manifestFiles,omitempty"`
+
+	// Path is the path within the repository to the kustomization (for Kustomize).
+	Path string `json:"path,omitempty" yaml:"path,omitempty"`
+}
+
+// ApplyRegistryDefaults fills in ComponentRef fields from ComponentConfig defaults.
+// This applies registry defaults for fields that are not already set in the ComponentRef.
+func (ref *ComponentRef) ApplyRegistryDefaults(config *ComponentConfig) {
+	if config == nil {
+		return
+	}
+
+	// Set type from config if not already set
+	if ref.Type == "" {
+		ref.Type = config.GetType()
+	}
+
+	switch ref.Type {
+	case ComponentTypeHelm:
+		// Apply Helm defaults
+		if ref.Source == "" && config.Helm.DefaultRepository != "" {
+			ref.Source = config.Helm.DefaultRepository
+		}
+		if ref.Version == "" && config.Helm.DefaultVersion != "" {
+			ref.Version = config.Helm.DefaultVersion
+		}
+	case ComponentTypeKustomize:
+		// Apply Kustomize defaults
+		if ref.Source == "" && config.Kustomize.DefaultSource != "" {
+			ref.Source = config.Kustomize.DefaultSource
+		}
+		if ref.Tag == "" && config.Kustomize.DefaultTag != "" {
+			ref.Tag = config.Kustomize.DefaultTag
+		}
+		if ref.Path == "" && config.Kustomize.DefaultPath != "" {
+			ref.Path = config.Kustomize.DefaultPath
+		}
+	}
 }
 
 // RecipeMetadataSpec contains the specification for a recipe.
@@ -270,6 +308,11 @@ func mergeComponentRef(base, overlay ComponentRef) ComponentRef {
 				result.ManifestFiles = append(result.ManifestFiles, f)
 			}
 		}
+	}
+
+	// Path: overlay takes precedence if set (for Kustomize)
+	if overlay.Path != "" {
+		result.Path = overlay.Path
 	}
 
 	return result

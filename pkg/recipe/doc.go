@@ -24,7 +24,7 @@
 //	    Header                              // API version, kind, metadata
 //	    Criteria      *Criteria             // Input criteria
 //	    MatchedRules  []string              // Applied overlay rules
-//	    ComponentRefs []ComponentRef        // Component references with versions
+//	    ComponentRefs []ComponentRef        // Component references (Helm or Kustomize)
 //	    Constraints   []ConstraintRef       // Validation constraints
 //	}
 //
@@ -216,6 +216,23 @@
 //   - pkg/version - Version parsing
 //   - pkg/header - Common header types
 //   - pkg/errors - Structured error handling
+//
+// # Component Types
+//
+// The recipe system supports two component deployment types:
+//
+// Helm Components:
+//   - Use Helm charts for deployment
+//   - Configured via helm section in registry.yaml
+//   - Support values files and inline overrides
+//
+// Kustomize Components:
+//   - Use Kustomize for deployment
+//   - Configured via kustomize section in registry.yaml
+//   - Support Git/OCI sources with path and tag
+//
+// The component registry (pkg/recipe/data/registry.yaml) determines component
+// defaults. Components must have either helm OR kustomize configuration.
 //
 // # Subpackages
 //

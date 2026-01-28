@@ -165,14 +165,16 @@ constraints:
 
 ### Component Reference Structure
 
-Each component in `componentRefs` defines a deployable unit:
+Each component in `componentRefs` defines a deployable unit. Components can be either Helm or Kustomize based.
+
+**Helm Component Example:**
 
 ```yaml
 componentRefs:
-  - name: gpu-operator           # Component identifier (must match bundler name)
-    type: Helm                   # Deployment type: Helm or Kustomize
-    source: https://helm.ngc.nvidia.com/nvidia  # Repository URL or OCI reference
-    version: v25.3.3             # Chart/component version
+  - name: gpu-operator           # Component identifier (must match registry name)
+    type: Helm                   # Deployment type
+    source: https://helm.ngc.nvidia.com/nvidia  # Helm repository URL
+    version: v25.3.3             # Chart version
     valuesFile: components/gpu-operator/values.yaml  # Path to values file
     overrides:                   # Inline value overrides
       driver:
@@ -183,17 +185,34 @@ componentRefs:
       - cert-manager
 ```
 
+**Kustomize Component Example:**
+
+```yaml
+componentRefs:
+  - name: my-kustomize-app       # Component identifier (must match registry name)
+    type: Kustomize              # Deployment type
+    source: https://github.com/example/my-app  # Git repository or OCI reference
+    tag: v1.0.0                  # Git tag, branch, or commit
+    path: deploy/production      # Path to kustomization within repo
+    patches:                     # Patch files to apply
+      - patches/custom-patch.yaml
+    dependencyRefs:
+      - cert-manager
+```
+
 **Component Fields:**
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `name` | Yes | Unique component identifier (matches bundler name) |
+| `name` | Yes | Unique component identifier (matches registry name) |
 | `type` | Yes | `Helm` or `Kustomize` |
-| `source` | Yes | Repository URL or OCI reference |
+| `source` | Yes | Repository URL, OCI reference, or Git URL |
 | `version` | No | Chart version (for Helm) |
-| `tag` | No | Resource tag (for Kustomize) |
-| `valuesFile` | No | Path to values file (relative to data directory) |
-| `overrides` | No | Inline values that override valuesFile |
+| `tag` | No | Git tag, branch, or commit (for Kustomize) |
+| `path` | No | Path to kustomization within repository (for Kustomize) |
+| `valuesFile` | No | Path to values file (relative to data directory, for Helm) |
+| `overrides` | No | Inline values that override valuesFile (for Helm) |
+| `patches` | No | Patch files to apply (for Kustomize) |
 | `dependencyRefs` | No | List of component names this depends on |
 
 ## Multi-Level Inheritance
@@ -1175,7 +1194,7 @@ my-data/
         └── values.yaml        # Replaces embedded gpu-operator values
 ```
 
-**External registry.yaml (adds custom component):**
+**External registry.yaml (adds custom Helm component):**
 
 ```yaml
 apiVersion: cns.nvidia.com/v1alpha1
@@ -1188,6 +1207,24 @@ components:
       defaultChart: my-custom-operator
       defaultVersion: v1.0.0
 ```
+
+**External registry.yaml (adds custom Kustomize component):**
+
+```yaml
+apiVersion: cns.nvidia.com/v1alpha1
+kind: ComponentRegistry
+components:
+  - name: my-kustomize-app
+    displayName: My Kustomize App
+    valueOverrideKeys:
+      - mykustomize
+    kustomize:
+      defaultSource: https://github.com/example/my-app
+      defaultPath: deploy/production
+      defaultTag: v1.0.0
+```
+
+**Note:** A component must have either `helm` OR `kustomize` configuration, not both.
 
 **CLI usage:**
 

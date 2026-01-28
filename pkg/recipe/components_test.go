@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestLoadComponentRegistry(t *testing.T) {
@@ -437,5 +439,192 @@ func TestComponentRegistry_GetEmptyByName(t *testing.T) {
 	result := registry.Get("test")
 	if result != nil {
 		t.Error("expected nil for registry with nil byName map")
+	}
+}
+
+func TestComponentConfig_GetType(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *ComponentConfig
+		expected ComponentType
+	}{
+		{
+			name:     "nil config returns Helm",
+			config:   nil,
+			expected: ComponentTypeHelm,
+		},
+		{
+			name: "empty config returns Helm",
+			config: &ComponentConfig{
+				Name: "test",
+			},
+			expected: ComponentTypeHelm,
+		},
+		{
+			name: "helm config returns Helm",
+			config: &ComponentConfig{
+				Name: "test",
+				Helm: HelmConfig{
+					DefaultRepository: "https://charts.example.com",
+					DefaultChart:      "example/chart",
+				},
+			},
+			expected: ComponentTypeHelm,
+		},
+		{
+			name: "kustomize config returns Kustomize",
+			config: &ComponentConfig{
+				Name: "test",
+				Kustomize: KustomizeConfig{
+					DefaultSource: "https://github.com/example/repo",
+				},
+			},
+			expected: ComponentTypeKustomize,
+		},
+		{
+			name: "kustomize with path and tag returns Kustomize",
+			config: &ComponentConfig{
+				Name: "test",
+				Kustomize: KustomizeConfig{
+					DefaultSource: "https://github.com/example/repo",
+					DefaultPath:   "deploy/production",
+					DefaultTag:    "v1.0.0",
+				},
+			},
+			expected: ComponentTypeKustomize,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.config.GetType()
+			if result != tt.expected {
+				t.Errorf("GetType() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestComponentRegistry_Validate_MutuallyExclusiveHelmKustomize(t *testing.T) {
+	t.Run("helm only is valid", func(t *testing.T) {
+		registry := &ComponentRegistry{
+			Components: []ComponentConfig{
+				{
+					Name:        "test-helm",
+					DisplayName: "Test Helm",
+					Helm: HelmConfig{
+						DefaultRepository: "https://charts.example.com",
+						DefaultChart:      "example/chart",
+					},
+				},
+			},
+		}
+		errs := registry.Validate()
+		for _, e := range errs {
+			if strings.Contains(e.Error(), "both helm and kustomize") {
+				t.Errorf("unexpected error for helm-only component: %v", e)
+			}
+		}
+	})
+
+	t.Run("kustomize only is valid", func(t *testing.T) {
+		registry := &ComponentRegistry{
+			Components: []ComponentConfig{
+				{
+					Name:        "test-kustomize",
+					DisplayName: "Test Kustomize",
+					Kustomize: KustomizeConfig{
+						DefaultSource: "https://github.com/example/repo",
+					},
+				},
+			},
+		}
+		errs := registry.Validate()
+		for _, e := range errs {
+			if strings.Contains(e.Error(), "both helm and kustomize") {
+				t.Errorf("unexpected error for kustomize-only component: %v", e)
+			}
+		}
+	})
+
+	t.Run("both helm and kustomize is invalid", func(t *testing.T) {
+		registry := &ComponentRegistry{
+			Components: []ComponentConfig{
+				{
+					Name:        "test-both",
+					DisplayName: "Test Both",
+					Helm: HelmConfig{
+						DefaultRepository: "https://charts.example.com",
+						DefaultChart:      "example/chart",
+					},
+					Kustomize: KustomizeConfig{
+						DefaultSource: "https://github.com/example/repo",
+					},
+				},
+			},
+		}
+		errs := registry.Validate()
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Error(), "both helm and kustomize") {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("expected error about both helm and kustomize configuration")
+		}
+	})
+}
+
+func TestKustomizeConfig_Parsing(t *testing.T) {
+	// Test that KustomizeConfig can be parsed correctly from YAML
+	const (
+		testKustomizeSource = "https://github.com/example/my-app"
+		testKustomizePath   = "deploy/production"
+		testKustomizeTag    = "v1.0.0"
+	)
+
+	yamlData := `
+apiVersion: cns.nvidia.com/v1alpha1
+kind: ComponentRegistry
+components:
+  - name: my-kustomize-app
+    displayName: My Kustomize App
+    valueOverrideKeys:
+      - mykustomize
+    kustomize:
+      defaultSource: https://github.com/example/my-app
+      defaultPath: deploy/production
+      defaultTag: v1.0.0
+`
+
+	var registry ComponentRegistry
+	err := yaml.Unmarshal([]byte(yamlData), &registry)
+	if err != nil {
+		t.Fatalf("failed to unmarshal YAML: %v", err)
+	}
+
+	if len(registry.Components) != 1 {
+		t.Fatalf("expected 1 component, got %d", len(registry.Components))
+	}
+
+	comp := registry.Components[0]
+	if comp.Name != "my-kustomize-app" {
+		t.Errorf("Name = %q, want %q", comp.Name, "my-kustomize-app")
+	}
+	if comp.Kustomize.DefaultSource != testKustomizeSource {
+		t.Errorf("Kustomize.DefaultSource = %q, want %q", comp.Kustomize.DefaultSource, testKustomizeSource)
+	}
+	if comp.Kustomize.DefaultPath != testKustomizePath {
+		t.Errorf("Kustomize.DefaultPath = %q, want %q", comp.Kustomize.DefaultPath, testKustomizePath)
+	}
+	if comp.Kustomize.DefaultTag != testKustomizeTag {
+		t.Errorf("Kustomize.DefaultTag = %q, want %q", comp.Kustomize.DefaultTag, testKustomizeTag)
+	}
+
+	// Verify GetType returns Kustomize
+	if comp.GetType() != ComponentTypeKustomize {
+		t.Errorf("GetType() = %v, want %v", comp.GetType(), ComponentTypeKustomize)
 	}
 }

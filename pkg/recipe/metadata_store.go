@@ -294,6 +294,9 @@ func (s *MetadataStore) BuildRecipeResult(ctx context.Context, criteria *Criteri
 		return nil, cnserrors.Wrap(cnserrors.ErrCodeInternal, "failed to compute deployment order", err)
 	}
 
+	// Apply registry defaults to component refs
+	applyRegistryDefaults(mergedSpec.ComponentRefs)
+
 	// Build result
 	result := &RecipeResult{
 		Kind:            "recipeResult",
@@ -439,6 +442,9 @@ func (s *MetadataStore) BuildRecipeResultWithEvaluator(ctx context.Context, crit
 		return nil, cnserrors.Wrap(cnserrors.ErrCodeInternal, "failed to compute deployment order", err)
 	}
 
+	// Apply registry defaults to component refs
+	applyRegistryDefaults(mergedSpec.ComponentRefs)
+
 	// Build result
 	result := &RecipeResult{
 		Kind:            "recipeResult",
@@ -509,4 +515,22 @@ func (s *MetadataStore) evaluateOverlayConstraints(overlay *RecipeMetadata, eval
 	}
 
 	return allPassed, warnings
+}
+
+// applyRegistryDefaults fills in ComponentRef fields from ComponentConfig defaults.
+// This allows registry.yaml to specify default values that are applied to components
+// that don't explicitly set them in recipes.
+func applyRegistryDefaults(refs []ComponentRef) {
+	registry, err := GetComponentRegistry()
+	if err != nil {
+		slog.Warn("failed to get component registry for defaults", "error", err)
+		return
+	}
+
+	for i := range refs {
+		config := registry.Get(refs[i].Name)
+		if config != nil {
+			refs[i].ApplyRegistryDefaults(config)
+		}
+	}
 }

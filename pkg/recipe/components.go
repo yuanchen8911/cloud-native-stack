@@ -35,6 +35,9 @@ type ComponentConfig struct {
 	// Helm contains default Helm chart settings.
 	Helm HelmConfig `yaml:"helm,omitempty"`
 
+	// Kustomize contains default Kustomize settings.
+	Kustomize KustomizeConfig `yaml:"kustomize,omitempty"`
+
 	// NodeScheduling defines paths for injecting node selectors and tolerations.
 	NodeScheduling NodeSchedulingConfig `yaml:"nodeScheduling,omitempty"`
 }
@@ -49,6 +52,18 @@ type HelmConfig struct {
 
 	// DefaultVersion is the default chart version if not specified in recipe.
 	DefaultVersion string `yaml:"defaultVersion,omitempty"`
+}
+
+// KustomizeConfig contains default Kustomize settings for a component.
+type KustomizeConfig struct {
+	// DefaultSource is the default Git repository or OCI reference.
+	DefaultSource string `yaml:"defaultSource,omitempty"`
+
+	// DefaultPath is the path within the repository to the kustomization.
+	DefaultPath string `yaml:"defaultPath,omitempty"`
+
+	// DefaultTag is the default Git tag, branch, or commit.
+	DefaultTag string `yaml:"defaultTag,omitempty"`
 }
 
 // NodeSchedulingConfig defines paths for node scheduling injection.
@@ -210,6 +225,16 @@ func (r *ComponentRegistry) Validate() []error {
 		}
 	}
 
+	// Check for mutually exclusive helm/kustomize configuration
+	for i, comp := range r.Components {
+		hasHelm := comp.Helm.DefaultRepository != "" || comp.Helm.DefaultChart != ""
+		hasKustomize := comp.Kustomize.DefaultSource != ""
+
+		if hasHelm && hasKustomize {
+			errs = append(errs, fmt.Errorf("component[%d] (%s): cannot have both helm and kustomize configuration", i, comp.Name))
+		}
+	}
+
 	return errs
 }
 
@@ -243,4 +268,17 @@ func (c *ComponentConfig) GetAcceleratedTolerationPaths() []string {
 		return nil
 	}
 	return c.NodeScheduling.Accelerated.TolerationPaths
+}
+
+// GetType returns the component deployment type based on which config is present.
+// Returns ComponentTypeKustomize if Kustomize.DefaultSource is set,
+// otherwise returns ComponentTypeHelm (the default).
+func (c *ComponentConfig) GetType() ComponentType {
+	if c == nil {
+		return ComponentTypeHelm
+	}
+	if c.Kustomize.DefaultSource != "" {
+		return ComponentTypeKustomize
+	}
+	return ComponentTypeHelm
 }

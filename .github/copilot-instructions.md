@@ -83,6 +83,8 @@ make server   # Start API server locally
 
 ### I Need To: Add Support for New Component/Operator
 
+**For Helm Components:**
+
 1. **Add to component registry** (`pkg/recipe/data/registry.yaml`):
    ```yaml
    - name: my-operator
@@ -105,6 +107,29 @@ make server   # Start API server locally
        version: v1.0.0
        valuesFile: components/my-operator/values.yaml
    ```
+
+**For Kustomize Components:**
+
+1. **Add to component registry** (`pkg/recipe/data/registry.yaml`):
+   ```yaml
+   - name: my-kustomize-app
+     displayName: My Kustomize App
+     valueOverrideKeys: [mykustomize]
+     kustomize:
+       defaultSource: https://github.com/example/my-app
+       defaultPath: deploy/production
+       defaultTag: v1.0.0
+   ```
+
+2. **Reference in recipe** (`pkg/recipe/data/overlays/*.yaml`):
+   ```yaml
+   componentRefs:
+     - name: my-kustomize-app
+       type: Kustomize
+       tag: v1.0.0
+   ```
+
+**Note:** A component must have either `helm` OR `kustomize` configuration, not both.
 
 4. **Run tests**:
    ```bash

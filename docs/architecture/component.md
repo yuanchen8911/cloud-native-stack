@@ -120,6 +120,8 @@ The bundler automatically includes manifest files in the umbrella chart's `templ
 
 The component registry (`pkg/recipe/data/registry.yaml`) supports these fields:
 
+**Helm Component Configuration:**
+
 ```yaml
 - name: component-name              # Required: Component identifier
   displayName: Component Name       # Required: Human-readable name
@@ -141,6 +143,21 @@ The component registry (`pkg/recipe/data/registry.yaml`) supports these fields:
       tolerationPaths:
         - daemonsets.tolerations
 ```
+
+**Kustomize Component Configuration:**
+
+```yaml
+- name: my-kustomize-app            # Required: Component identifier
+  displayName: My Kustomize App     # Required: Human-readable name
+  valueOverrideKeys:               # Optional: Alternative --set prefixes
+    - mykustomize
+  kustomize:
+    defaultSource: https://github.com/example/my-app  # Required: Git repo or OCI reference
+    defaultPath: deploy/production  # Optional: Path to kustomization
+    defaultTag: v1.0.0              # Optional: Git tag, branch, or commit
+```
+
+**Note:** A component must have either `helm` OR `kustomize` configuration, not both. The system will detect the component type based on which configuration is present.
 
 **Note:**
 - Values are written directly to `values.yaml`, not via templates

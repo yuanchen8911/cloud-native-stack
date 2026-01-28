@@ -62,8 +62,10 @@ ArgoCD:
 
 # Adding New Components
 
-To add a new component, add an entry to pkg/recipe/data/components.yaml.
-No Go code is required:
+To add a new component, add an entry to pkg/recipe/data/registry.yaml.
+No Go code is required.
+
+Helm Component Example:
 
   - name: my-component
     displayName: My Component
@@ -74,6 +76,18 @@ No Go code is required:
     nodeScheduling:
     system:
     nodeSelectorPaths: [operator.nodeSelector]
+
+Kustomize Component Example:
+
+  - name: my-kustomize-app
+    displayName: My Kustomize App
+    valueOverrideKeys: [mykustomize]
+    kustomize:
+    defaultSource: https://github.com/example/my-app
+    defaultPath: deploy/production
+    defaultTag: v1.0.0
+
+Note: A component must have either 'helm' OR 'kustomize' configuration, not both.
 
 See https://github.com/NVIDIA/cloud-native-stack for more information.
 */

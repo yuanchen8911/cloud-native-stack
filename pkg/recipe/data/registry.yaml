@@ -7,11 +7,19 @@
 #   name:              Component identifier used in recipes (e.g., "gpu-operator")
 #   displayName:       Human-readable name for templates and output
 #   valueOverrideKeys: Alternative keys for --set flag (e.g., --set gpuoperator:key=value)
-#   helm:              Default Helm chart settings (can be overridden in recipes)
+#   helm:              Default Helm chart settings (for Helm components)
+#     defaultRepository: Helm repository URL
+#     defaultChart:      Chart name (e.g., "nvidia/gpu-operator")
+#     defaultVersion:    Default chart version if not specified in recipe
+#   kustomize:         Default Kustomize settings (for Kustomize components)
+#     defaultSource:     Git repository or OCI reference
+#     defaultPath:       Path within the repository to the kustomization
+#     defaultTag:        Git tag, branch, or commit
 #   nodeScheduling:    Paths in Helm values where node selectors/tolerations are injected
 #
+# Note: A component must have either 'helm' OR 'kustomize' configuration, not both.
 # Node scheduling paths define WHERE CLI flags like --system-node-selector are applied.
-# Note: The actual values come from CLI flags, not from this file.
+# The actual values come from CLI flags, not from this file.
 #
 apiVersion: cns.nvidia.com/v1alpha1
 kind: ComponentRegistry
