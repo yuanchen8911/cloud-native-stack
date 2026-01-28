@@ -116,7 +116,7 @@ CDI provides a standardized way to expose specialized devices to containers.
 
 #### Key Configuration Parameters
 - `cdi.enabled`: Enables CDI support across the stack
-- `cdi.default`: Makes CDI the default GPU injection mechanism
+- `cdi.default`: Makes CDI the default GPU injection mechanism (⚠️ **Deprecated in v25.10.0+**: becomes no-op/ignored)
 
 ### Configuration Scenarios
 
@@ -133,28 +133,30 @@ cdi:
 ```yaml
 cdi:
   enabled: true
-  default: false
+  default: false  # ⚠️ Deprecated in v25.10.0+, ignored
 ```
 - **Default behavior**: Legacy GPU allocation
 - **Opt-in to CDI**: Set `runtimeClassName: nvidia-cdi` in pod spec
 - **Known Issue**: ⚠️ **Avoid with `DEVICE_LIST_STRATEGY=volume-mounts`** (causes deployment issues)
+- **Note**: `default: false` setting becomes no-op in GPU Operator v25.10.0+
 
 #### Scenario 3: CDI Default Mode
 ```yaml
 cdi:
   enabled: true
-  default: true
+  default: true  # ⚠️ Deprecated in v25.10.0+, ignored but safe to include
 ```
 - **Default behavior**: CDI-based GPU allocation
 - **Opt-out to legacy**: Set `runtimeClassName: nvidia` in pod spec
 - **Recommended for**: AWS deployments, newer clusters
+- **Note**: `default: true` setting becomes no-op in GPU Operator v25.10.0+ but remains safe to configure
 
 ### Platform-Specific Recommendations
 
 | Platform | CDI Configuration | Notes |
 |----------|------------------|--------|
 | **AWS EKS** | `enabled: true, default: true` | Recommended configuration |
-| **GKE** | `enabled: true` (explicit) | Must explicitly enable CDI |
+| **GKE** | `enabled: true` (required) | ⚠️ **Must explicitly set `cdi.enabled: true`** - CDI cannot rely on defaults on GKE |
 | **OCI with CRI-O** | `enabled: false, default: false` | CRI-O has built-in CDI support |
 
 ### Device List Strategy
@@ -184,8 +186,9 @@ devicePlugin:
 - **Abstraction**: GPU Operator toolkit abstracts runtime differences
 
 #### GKE-Specific Requirements
-- CDI must be **explicitly enabled** (`cdi.enabled: true`)
-- Cannot rely on default CDI settings
+- CDI must be **explicitly enabled** (`cdi.enabled: true`) - this is mandatory for GKE
+- Cannot rely on default CDI settings on GKE platform
+- ⚠️ **Critical**: Always set `cdi.enabled: true` explicitly in GKE deployments
 
 ---
 
@@ -200,10 +203,11 @@ devicePlugin:
 ```yaml
 cdi:
   enabled: true
-  default: true  # Set both to true
+  default: true  # Set both to true (⚠️ Note: 'default' parameter deprecated in v25.10.0+)
 ```
 
 **Status**: Fixed in upcoming GPU Operator release (not backported to 25.3.2)
+**Note**: With GPU Operator v25.10.0+, the `cdi.default` parameter becomes no-op, so this issue is automatically resolved
 
 ### Issue 2: EFA Compatibility on EKS H100
 **Problem**: H100 GPUs require newer EFA version (1.43.3) with R580 driver
@@ -242,10 +246,11 @@ gke-no-default-nvidia-gpu-device-plugin: "true"
 ## Key Takeaways
 
 ### 🎯 **Configuration Best Practices**
-1. **Use CDI default mode** (`enabled: true, default: true`) for new deployments
-2. **Explicitly configure CDI** on GKE clusters
+1. **Use CDI default mode** (`enabled: true, default: true`) for new deployments (⚠️ Note: `default` parameter deprecated in v25.10.0+)
+2. **Explicitly configure CDI** on GKE clusters - **always set `cdi.enabled: true`** (required for GKE)
 3. **Validate node labels** before GPU Operator deployment
 4. **Match EFA versions** with GPU driver requirements on EKS
+5. **Upgrade to v25.10.0+** to avoid CDI configuration complexity (deprecated parameters become no-op)
 
 ### 🔧 **Troubleshooting Checklist**
 - [ ] Verify GPU Operator version compatibility
