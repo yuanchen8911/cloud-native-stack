@@ -1,6 +1,6 @@
-# GPU Operator Configuration Guide
+# GPU Operator Configuration Guide 
 
-A practical guide for deploying and configuring the NVIDIA GPU Operator across Kubernetes platforms.
+A practical guide for deploying and configuring the NVIDIA GPU Operator in HIPPO across Kubernetes platforms.
 
 ---
 
