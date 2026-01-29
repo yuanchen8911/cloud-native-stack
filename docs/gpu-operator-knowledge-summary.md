@@ -1,14 +1,16 @@
-# NVIDIA GPU Operator Configuration Guide
-## Knowledge Summary and Best Practices
+# GPU Operator Configuration Guide
+
+A practical guide for deploying and configuring the NVIDIA GPU Operator across Kubernetes platforms.
 
 ---
 
 ## Table of Contents
+
 1. [GPU Operator Versioning](#gpu-operator-versioning)
 2. [Component Versions](#component-versions)
 3. [GPU Driver Management](#gpu-driver-management)
 4. [Container Device Interface (CDI) Configuration](#container-device-interface-cdi-configuration)
-5. [CDI Runtime Considerations](#cdi-runtime-considerations)
+5. [CDI and Container Runtime Compatibility](#cdi-and-container-runtime-compatibility)
 6. [Common Issues and Solutions](#common-issues-and-solutions)
 
 ---
@@ -16,26 +18,37 @@
 ## GPU Operator Versioning
 
 ### Version Pattern
+
 The GPU Operator follows a **YY.MM.PP** calendar versioning scheme:
-- **YY.MM**: Major version indicating initial release date (e.g., 25.10, 25.3)
-- **PP**: Patch version for critical bugs, CVEs, and minor features
+
+| Segment | Description | Example |
+|---------|-------------|---------|
+| **YY.MM** | Major version (release date) | 25.10, 25.3 |
+| **PP** | Patch version | 0, 1, 2 |
 
 ### Product Lifecycle
-- **New Major Release**: Previous major version enters maintenance support
-- **Maintenance Support**: Only receives patch releases for critical bugs and CVE fixes
-- **End of Life (EOL)**: All prior major versions no longer supported
+
+| Phase | Description |
+|-------|-------------|
+| **GA** | Active development with new features |
+| **Maintenance** | Critical bugs and CVE fixes only |
+| **EOL** | No longer supported |
 
 ### Current Supported Versions
+
 | GPU Operator Version | Status |
 |---------------------|--------|
 | 25.10.x | GA (Generally Available) |
 | 25.3.x | Maintenance |
-| 24.9.x and lower | EOL (End of Life) |
+| 24.9.x and earlier | EOL (End of Life) |
 
 ### Upgrade Policy
-- ✅ **Supported**: Upgrades within major releases (e.g., 25.10.0 → 25.10.1)
-- ✅ **Supported**: Upgrades to next major release (e.g., 25.3.x → 25.10.x)
-- ❌ **Unsupported**: Skipping major versions
+
+| Upgrade Path | Supported |
+|--------------|-----------|
+| Within major release (25.10.0 → 25.10.1) | ✅ Yes |
+| To next major release (25.3.x → 25.10.x) | ✅ Yes |
+| Skipping major versions (24.9.x → 25.10.x) | ❌ No |
 
 ---
 
@@ -111,56 +124,74 @@ Configure during cluster/node pool creation:
 
 ## Container Device Interface (CDI) Configuration
 
-### CDI Settings Overview
-CDI provides a standardized way to expose specialized devices to containers.
+### What is CDI?
 
-#### Key Configuration Parameters
-- `cdi.enabled`: Enables CDI support across the stack
-- `cdi.default`: Makes CDI the default GPU injection mechanism (⚠️ **Deprecated in v25.10.0+**: becomes no-op/ignored)
+CDI (Container Device Interface) is a specification that standardizes how container runtimes access specialized hardware devices. For GPUs, CDI provides:
+
+- Declarative device configuration via JSON spec files
+- Runtime-agnostic device injection
+- Cleaner separation between device vendors and container runtimes
+
+### Key Concepts
+
+Understanding CDI requires distinguishing two separate concerns:
+
+| Concern | Description | Controlled By |
+|---------|-------------|---------------|
+| **CDI Spec Generation** | Creating JSON files that describe GPU devices | GPU Operator (`cdi.enabled`) |
+| **CDI Spec Consumption** | Runtime reading and applying CDI specs | Container runtime (containerd/CRI-O) |
+
+Both must be functional for CDI to work.
+
+### GPU Operator CDI Parameters
+
+| Parameter | Description | Status |
+|-----------|-------------|--------|
+| `cdi.enabled` | Enables CDI spec generation by nvidia-container-toolkit | Active |
+| `cdi.default` | Makes CDI the default injection mechanism | **Deprecated in v25.10.0+** (no-op) |
 
 ### Configuration Scenarios
 
-#### Scenario 1: Legacy Mode (Default)
+#### Scenario 1: Legacy Mode (No CDI)
+
 ```yaml
 cdi:
   enabled: false
 ```
-- Uses traditional GPU allocation
-- No runtime class specification needed
-- Proven stability
 
-#### Scenario 2: CDI Available, Legacy Default
+- Uses traditional nvidia-container-runtime hook
+- No CDI specs generated
+- Works with all container runtimes
+- Proven stability, but less flexible
+
+#### Scenario 2: CDI Enabled
+
 ```yaml
 cdi:
   enabled: true
-  default: false  # ⚠️ Deprecated in v25.10.0+, ignored
 ```
-- **Default behavior**: Legacy GPU allocation
-- **Opt-in to CDI**: Set `runtimeClassName: nvidia-cdi` in pod spec
-- **Known Issue**: ⚠️ **Avoid with `DEVICE_LIST_STRATEGY=volume-mounts`** (causes deployment issues)
-- **Note**: `default: false` setting becomes no-op in GPU Operator v25.10.0+
 
-#### Scenario 3: CDI Default Mode
-```yaml
-cdi:
-  enabled: true
-  default: true  # ⚠️ Deprecated in v25.10.0+, ignored but safe to include
-```
-- **Default behavior**: CDI-based GPU allocation
-- **Opt-out to legacy**: Set `runtimeClassName: nvidia` in pod spec
-- **Recommended for**: AWS deployments, newer clusters
-- **Note**: `default: true` setting becomes no-op in GPU Operator v25.10.0+ but remains safe to configure
+- Generates CDI specs in `/var/run/cdi/`
+- Runtime must support CDI (see compatibility section below)
+- **Recommended for new deployments**
+
+> **Note (v25.10.0+)**: The `cdi.default` parameter is deprecated and ignored. CDI behavior is determined by runtime configuration and RuntimeClass selection.
 
 ### Platform-Specific Recommendations
 
-| Platform | CDI Configuration | Notes |
-|----------|------------------|--------|
-| **AWS EKS** | `enabled: true, default: true` | Recommended configuration |
-| **GKE** | `enabled: true` (required) | ⚠️ **Must explicitly set `cdi.enabled: true`** - CDI cannot rely on defaults on GKE |
-| **OCI with CRI-O** | `enabled: false, default: false` | CRI-O has built-in CDI support |
+| Platform | Configuration | Rationale |
+|----------|---------------|-----------|
+| **AWS EKS** | `cdi.enabled: true` | containerd with CDI support |
+| **GKE** | `cdi.enabled: true` (required) | Must be explicit; cannot rely on defaults |
+| **Azure AKS** | `cdi.enabled: true` | containerd with CDI support |
+| **On-prem (containerd 2.0+)** | `cdi.enabled: true` | CDI enabled by default in runtime |
+| **On-prem (containerd 1.7)** | `cdi.enabled: true` | Toolkit configures runtime automatically |
+| **On-prem (CRI-O)** | `cdi.enabled: true` | CRI-O has native CDI support |
 
 ### Device List Strategy
-When CDI is enabled, configure:
+
+The device plugin uses `DEVICE_LIST_STRATEGY` to determine how GPUs are communicated to containers:
+
 ```yaml
 devicePlugin:
   env:
@@ -168,102 +199,258 @@ devicePlugin:
       value: "cdi-cri,cdi-annotations,volume-mounts"
 ```
 
+| Strategy | Description |
+|----------|-------------|
+| `cdi-cri` | Passes CDI device IDs via CRI (preferred with CDI) |
+| `cdi-annotations` | Uses pod annotations for CDI devices |
+| `volume-mounts` | Legacy volume mount method |
+
+The value is a comma-separated fallback chain—the device plugin tries each strategy in order.
+
+> **Known Issue**: Combining `cdi.enabled=true` with `DEVICE_LIST_STRATEGY=volume-mounts` alone can cause issues. Use the full fallback chain when CDI is enabled.
+
 ---
 
-## CDI Runtime Considerations
+## CDI and Container Runtime Compatibility
 
-### Version-Specific Changes
+### How CDI Works with Container Runtimes
 
-#### GPU Operator v25.10.0+
-- `cdi.default` parameter becomes **no-op** (ignored)
-- CDI behavior determined by other configuration parameters
+```
+┌─────────────────────┐     ┌──────────────────────┐     ┌─────────────────┐
+│  GPU Operator       │     │  CDI Spec Files      │     │  Container      │
+│  (nvidia-toolkit)   │────▶│  /var/run/cdi/*.json │────▶│  Runtime        │
+│                     │     │                      │     │  (reads specs)  │
+│  cdi.enabled: true  │     │  Device definitions  │     │                 │
+└─────────────────────┘     └──────────────────────┘     └─────────────────┘
+        GENERATES                   STORED                    CONSUMES
+```
 
-### Runtime Differences
+### Container Runtime CDI Support Matrix
 
-#### Container Runtime Support
-- **CRI-O**: CDI enabled by default in runtime
-- **containerd v1.7.x**: CDI disabled by default, enabled by toolkit when in CDI mode
-- **Abstraction**: GPU Operator toolkit abstracts runtime differences
+| Runtime | Version | CDI Support | Configuration Needed |
+|---------|---------|-------------|---------------------|
+| **CRI-O** | ≥1.23 | Native (enabled by default) | None—works out of the box |
+| **CRI-O** | 1.20–1.22 | Available (flag required) | Enable via `--enable-cdi` |
+| **containerd** | ≥2.0 | Native (enabled by default) | None—works out of the box |
+| **containerd** | 1.7.x | Available (disabled by default) | Toolkit auto-configures when `cdi.enabled: true` |
+| **containerd** | <1.7 | Not available | Use legacy mode (`cdi.enabled: false`) |
 
-#### GKE-Specific Requirements
-- CDI must be **explicitly enabled** (`cdi.enabled: true`) - this is mandatory for GKE
-- Cannot rely on default CDI settings on GKE platform
-- ⚠️ **Critical**: Always set `cdi.enabled: true` explicitly in GKE deployments
+### Runtime-Specific Notes
+
+#### CRI-O
+
+CRI-O has **native CDI support** enabled by default since version 1.23. This means:
+
+- The runtime can consume CDI specs without any configuration changes
+- GPU Operator's `cdi.enabled: true` is still required to **generate** the CDI specs
+- No runtime configuration or restart needed
+
+```yaml
+# Correct configuration for CRI-O
+cdi:
+  enabled: true  # Required to generate CDI specs
+```
+
+#### containerd 2.0+
+
+containerd 2.0 enables CDI by default:
+
+- CDI spec consumption works out of the box
+- GPU Operator's `cdi.enabled: true` generates the specs
+- Simplest CDI deployment path
+
+#### containerd 1.7.x
+
+containerd 1.7 has CDI support but disabled by default:
+
+- Requires `enable_cdi = true` in containerd config
+- **nvidia-container-toolkit automatically configures this** when GPU Operator sets `cdi.enabled: true`
+- Runtime restart may be required after initial setup
+
+### GKE-Specific Requirements
+
+GKE requires explicit CDI configuration:
+
+```yaml
+# Required for GKE deployments
+cdi:
+  enabled: true  # Must be explicitly set
+```
+
+- Cannot rely on default values
+- GKE manages containerd configuration differently
+- Always verify CDI is enabled in your Helm values
 
 ---
 
 ## Common Issues and Solutions
 
-### Issue 1: CDI Configuration Bug
-**Problem**: Combination of `cdi.enabled=true`, `cdi.default=false` with `DEVICE_LIST_STRATEGY=volume-mounts`
+### Issue 1: CDI + Volume Mounts Strategy Conflict
 
-**Impact**: Deployment failures on GB200 AWS clusters
+**Symptom**: GPU pods fail to start or devices not visible in containers.
+
+**Cause**: Mismatch between CDI enablement and device list strategy.
+
+**Affected Configurations**:
+```yaml
+# Problematic combination (GPU Operator <25.10.0)
+cdi:
+  enabled: true
+  default: false
+devicePlugin:
+  env:
+    - name: DEVICE_LIST_STRATEGY
+      value: "volume-mounts"  # Missing CDI strategies
+```
 
 **Solution**:
 ```yaml
 cdi:
   enabled: true
-  default: true  # Set both to true (⚠️ Note: 'default' parameter deprecated in v25.10.0+)
+devicePlugin:
+  env:
+    - name: DEVICE_LIST_STRATEGY
+      value: "cdi-cri,cdi-annotations,volume-mounts"
 ```
 
-**Status**: Fixed in upcoming GPU Operator release (not backported to 25.3.2)
-**Note**: With GPU Operator v25.10.0+, the `cdi.default` parameter becomes no-op, so this issue is automatically resolved
+**Status**: Resolved in GPU Operator v25.10.0+ where `cdi.default` is deprecated.
 
-### Issue 2: EFA Compatibility on EKS H100
-**Problem**: H100 GPUs require newer EFA version (1.43.3) with R580 driver
+---
 
-**Impact**: Network performance issues, job failures
+### Issue 2: EFA Compatibility on EKS with H100
 
-**Solution**: Upgrade to AMI images that include EFA version 1.43.3+
+**Symptom**: Network performance issues or job failures on H100 instances.
+
+**Cause**: H100 GPUs with R580 driver require EFA version 1.43.3+.
+
+**Solution**: Upgrade to AMI images with EFA 1.43.3 or later.
+
+**Verification**:
+```bash
+# Check EFA version
+modinfo efa | grep version
+```
+
+---
 
 ### Issue 3: Missing GPU Feature Discovery Pods
-**Problem**: Pods not created due to missing tolerations/node selectors
 
-**Root Cause**: Nodes lack required labels for GPU Operator component scheduling
+**Symptom**: `nvidia-gpu-feature-discovery` pods not scheduled.
+
+**Cause**: Nodes missing required labels or tolerations not configured.
+
+**Diagnosis**:
+```bash
+# Check pending pods
+kubectl get pods -n gpu-operator -l app=nvidia-gpu-feature-discovery
+
+# Check node labels
+kubectl get nodes --show-labels | grep -E 'nvidia|gpu'
+
+# Check pod events
+kubectl describe pod <pod-name> -n gpu-operator
+```
 
 **Solution**: Ensure nodes have appropriate labels:
 
-#### Required Node Labels (HIPPO GKE Example):
 ```yaml
-# Node group classification
-nodeGroup: customer-gpu | customer-cpu | system-cpu
+# Common required labels
+nvidia.com/gpu.present: "true"
 
-# Workload dedication
-node.dgxc.nvidia.com/dedicated: customer-workload | system-workload
-
-# GKE-specific requirement for node-feature-discovery
+# GKE-specific
 gke-no-default-nvidia-gpu-device-plugin: "true"
 ```
 
-#### Verification Steps:
-1. Check node labels: `kubectl get nodes --show-labels`
-2. Verify GPU Operator component scheduling requirements
-3. Apply missing labels to nodes
-4. Restart affected pods if necessary
+---
+
+### Issue 4: CDI Specs Not Generated
+
+**Symptom**: No files in `/var/run/cdi/` or `/etc/cdi/`.
+
+**Diagnosis**:
+```bash
+# Check nvidia-container-toolkit pod logs
+kubectl logs -n gpu-operator -l app=nvidia-container-toolkit-daemonset
+
+# Verify CDI directory on node
+ls -la /var/run/cdi/
+```
+
+**Common Causes**:
+1. `cdi.enabled: false` in GPU Operator values
+2. Toolkit pod not running or failing
+3. Insufficient permissions to write CDI specs
+
+---
+
+### Issue 5: Runtime Not Consuming CDI Specs
+
+**Symptom**: CDI specs exist but containers don't see GPUs.
+
+**Diagnosis**:
+```bash
+# Check containerd config for CDI
+cat /etc/containerd/config.toml | grep -A5 cdi
+
+# For CRI-O, check if CDI is enabled
+crictl info | jq '.config.cdi'
+```
+
+**Solution for containerd 1.7.x** (if toolkit didn't auto-configure):
+```toml
+# /etc/containerd/config.toml
+[plugins."io.containerd.grpc.v1.cri"]
+  enable_cdi = true
+  cdi_spec_dirs = ["/etc/cdi", "/var/run/cdi"]
+```
+
+Then restart containerd: `systemctl restart containerd`
 
 ---
 
 ## Key Takeaways
 
-### 🎯 **Configuration Best Practices**
-1. **Use CDI default mode** (`enabled: true, default: true`) for new deployments (⚠️ Note: `default` parameter deprecated in v25.10.0+)
-2. **Explicitly configure CDI** on GKE clusters - **always set `cdi.enabled: true`** (required for GKE)
-3. **Validate node labels** before GPU Operator deployment
-4. **Match EFA versions** with GPU driver requirements on EKS
-5. **Upgrade to v25.10.0+** to avoid CDI configuration complexity (deprecated parameters become no-op)
+### Configuration Best Practices
 
-### 🔧 **Troubleshooting Checklist**
-- [ ] Verify GPU Operator version compatibility
-- [ ] Check CDI configuration for known issues
-- [ ] Validate node labels and tolerations
-- [ ] Confirm driver version compatibility
-- [ ] Review platform-specific requirements
+| Practice | Rationale |
+|----------|-----------|
+| Use `cdi.enabled: true` for new deployments | CDI is the modern, standardized approach |
+| Always set CDI explicitly on GKE | Cannot rely on defaults |
+| Use full device list strategy fallback | `cdi-cri,cdi-annotations,volume-mounts` |
+| Validate node labels before deployment | Prevents scheduling issues |
+| Match EFA versions with driver on EKS | Required for H100+ GPUs |
+| Upgrade to v25.10.0+ | Simplifies CDI configuration |
 
-### 📚 **Reference Resources**
-- [GPU Operator Documentation](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/)
-- [CDI Specification](https://github.com/container-orchestrated-devices/container-device-interface)
-- [NVIDIA GPU Driver Versions](https://www.nvidia.com/drivers)
+### Quick Reference: CDI Configuration by Runtime
+
+| Runtime | GPU Operator Config | Runtime Config |
+|---------|--------------------|--------------------|
+| CRI-O ≥1.23 | `cdi.enabled: true` | None needed |
+| containerd 2.0+ | `cdi.enabled: true` | None needed |
+| containerd 1.7.x | `cdi.enabled: true` | Auto-configured by toolkit |
+| containerd <1.7 | `cdi.enabled: false` | N/A (use legacy) |
+
+### Troubleshooting Checklist
+
+```
+[ ] GPU Operator version compatible with cluster?
+[ ] CDI enabled if using modern runtime?
+[ ] DEVICE_LIST_STRATEGY includes CDI options?
+[ ] Node labels present for GPU scheduling?
+[ ] CDI specs generated in /var/run/cdi/?
+[ ] Container runtime configured to consume CDI?
+[ ] Driver version compatible with GPU hardware?
+```
+
+### Reference Resources
+
+| Resource | URL |
+|----------|-----|
+| GPU Operator Docs | https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/ |
+| CDI Specification | https://github.com/cncf-tags/container-device-interface |
+| NVIDIA Driver Downloads | https://www.nvidia.com/drivers |
+| containerd CDI Docs | https://github.com/containerd/containerd/blob/main/docs/cdi.md |
 
 ---
 
-*This document consolidates practical knowledge and lessons learned from GPU Operator deployments across various Kubernetes platforms. Keep this guide updated as new versions and configurations are validated.*
+*Last updated: January 2025*
