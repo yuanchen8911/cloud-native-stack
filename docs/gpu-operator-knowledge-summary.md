@@ -1,6 +1,6 @@
 # GPU Operator Configuration Guide 
 
-A practical guide for deploying and configuring the NVIDIA GPU Operator in HIPPO across Kubernetes platforms.
+A practical guide for deploying and configuring the NVIDIA GPU Operator in Hippo across Kubernetes platforms.
 
 ---
 
@@ -283,7 +283,7 @@ cdi:
 
 ---
 
-## Common Issues and Solutions
+## Known Issues and Solutions in Hippo
 
 ### Issue 1: CDI + Volume Mounts Strategy Conflict
 
